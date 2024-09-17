@@ -178,6 +178,22 @@ def get_imdb(split: str, silent: bool = False, cache_dir: str = None) -> Dict[st
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
         row_data['rejected_response'] = row_data['rejected_response'].replace(substring_to_remove, "")
         return row_data
+    data = defaultdict(lambda: defaultdict(list))
+    for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
+        row_data = split_prompt_and_responses(row)
+        prompt = row_data['prompt']
+        chosen = row_data['chosen_response']
+        rejected = row_data['rejected_response']
+        pref_type = row_data['pref_type']
+        responses = [chosen, rejected]
+        n_responses = len(data[prompt]['responses'])
+        data[prompt]['pairs'].append((n_responses, n_responses + 1))
+        data[prompt]['responses'].extend(responses)
+        data[prompt]['sft_target'] = chosen
+        if 'weight' in row_data:
+            weight = row_data['weight']
+            data[prompt]['weight'].append(weight)
+    return data
 ###
 
 def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = None):
@@ -194,12 +210,11 @@ def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = No
     ###
     else:
         raise ValueError(f"Unknown dataset '{name}'")
-        
-    condition1 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
+    assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
         f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-    condition2 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'weight'}, \
-        f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-    assert condition1 or condition2
+    # condition2 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'weight'}, \
+    #     f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+
 
     return data
 
