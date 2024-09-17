@@ -160,8 +160,8 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
     return data
 
 ###
-def get_imdb(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    weights_dict = {1 : 1, 2: 0} ## update this later
+def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    weight_dict = {1 : 1, 2: 0} ## update this later
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_gpt2-large-imdb_multi-preference", split=split, cache_dir=cache_dir)
     print('done')
@@ -171,8 +171,8 @@ def get_imdb(split: str, silent: bool = False, cache_dir: str = None) -> Dict[st
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
         row_data['pref_type'] = ex['pref_type']
-        # if weight in ex: # update this
-        # row_data['weight'] = weights_dict[ex['pref_type']]
+        if 'pref_type' in ex: # UPDATE THIS!
+            row_data['weight'] = weight_dict[ex['pref_type']]
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
@@ -185,6 +185,12 @@ def get_imdb(split: str, silent: bool = False, cache_dir: str = None) -> Dict[st
         chosen = row_data['chosen_response']
         rejected = row_data['rejected_response']
         pref_type = row_data['pref_type']
+        if name == 'imdb_sentiment':
+            if pref_type == 2:
+                continue
+        if name == 'imdb_length':
+            if pref_type == 1:
+                continue
         responses = [chosen, rejected]
         n_responses = len(data[prompt]['responses'])
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
@@ -206,15 +212,14 @@ def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = No
         data = get_se(split, silent=silent, cache_dir=cache_dir)
     ###
     elif 'imdb' in name:
-        data = get_imdb(split, silent=silent, cache_dir=cache_dir)
+        data = get_imdb(split, name, silent=silent, cache_dir=cache_dir)
     ###
     else:
         raise ValueError(f"Unknown dataset '{name}'")
-    assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
-        f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+    # assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
+    #     f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
     # condition2 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'weight'}, \
     #     f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-
 
     return data
 
@@ -246,14 +251,15 @@ def get_collate_fn(tokenizer) -> Callable[[List[Dict]], Dict[str, Union[List, to
                 padded_batch[k] = pad_sequence(to_pad, batch_first=True, padding_value=padding_value)
                 if 'prompt' in k:  # for the prompt, flip back so padding is on left side
                     padded_batch[k] = padded_batch[k].flip(dims=[1])
+            elif k == 'weight':
+                padded_batch[k] = torch.tensor([ex[k] for ex in batch])
             else:
                 padded_batch[k] = [ex[k] for ex in batch]
-
         return padded_batch
     return collate_fn
 
 
-def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length: int) -> Dict:
+def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length: int, weight: int) -> Dict:
     """Tokenize a single batch element.
 
        At this stage, we don't convert to PyTorch tensors yet; we just handle the truncation
@@ -309,6 +315,7 @@ def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_m
     batch['rejected'] = prompt + rejected
     batch['chosen_response_only'] = chosen
     batch['rejected_response_only'] = rejected
+    batch['weight'] = weight ###
 
     for k, toks in {'chosen': chosen_sequence_tokens, 'rejected': rejected_sequence_tokens, 'prompt': prompt_tokens}.items():
         for type_key, tokens in toks.items():
@@ -392,7 +399,7 @@ def get_batch_iterator(names: List[str],
             sft_target = row[3]
             truncation_mode = row[4]
             if include_weight:
-                weight = row[5]
+                weight = [torch.tensor(i) for i in row[5]]
             if done:
                 break
             if sft_mode:
@@ -412,7 +419,11 @@ def get_batch_iterator(names: List[str],
                 for p in pairs:
                     if done:
                         break
-                    batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
+                    if include_weight:
+                        indx = int(min(p[0], p[1])/2)
+                        batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx])
+                    else:
+                        batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
                     batch.append(batch_element)
                     example_idx += 1
                     if len(batch) == batch_size:
