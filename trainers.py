@@ -50,7 +50,7 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
                     label_smoothing: float = 0.0,
                     ipo: bool = False,
                     reference_free: bool = False,
-                    weight: torch.FloatTensor = torch.tensor([]) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+                    weight: torch.FloatTensor = torch.tensor([])) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
     """Compute the DPO loss for a batch of policy and reference model log probabilities.
 
     Args:
