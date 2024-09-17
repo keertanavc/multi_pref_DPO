@@ -194,9 +194,12 @@ def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = No
     ###
     else:
         raise ValueError(f"Unknown dataset '{name}'")
-
-    assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
+        
+    condition1 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
         f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+    condition2 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'weight'}, \
+        f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+    assert condition1 or condition2
 
     return data
 
