@@ -40,6 +40,7 @@ import time
 import json
 import functools
 from typing import Optional, Dict, List, Union, Tuple
+from copy import deepcopy
 
 
 def preference_loss(policy_chosen_logps: torch.FloatTensor,
