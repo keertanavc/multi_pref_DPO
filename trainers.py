@@ -339,7 +339,7 @@ class BasicTrainer(object):
                             reference_text_table = wandb.Table(columns=["step", "prompt", "sample"])
 
                     #for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
-                    for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
+                    for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
                             _, eval_metrics = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
