@@ -161,7 +161,7 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
 
 ###
 def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    weight_dict = {1 : 1, 2: 0} ## update this later
+    weight_dict = {1 : 0, 2: 1} ## update this later
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_gpt2-large-imdb_multi-preference", split=split, cache_dir=cache_dir)
     print('done')
