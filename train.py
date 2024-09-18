@@ -116,5 +116,5 @@ def train_weighted_dpo(config: DictConfig):
         print('starting single-process worker')
         worker_main(0, 1, config, policy, reference_model)
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()
