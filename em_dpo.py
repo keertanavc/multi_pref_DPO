@@ -29,6 +29,7 @@ def main(config: DictConfig):
     # ensemble of policies
     dynamic_params['policies'] = []
     for group in range(config.num_groups):
+        print(group)
         dynamic_params['group'] = group
         train_weighted_dpo(config, dynamic_params)
         print(dynamic_params)
