@@ -46,15 +46,15 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
-def train_weighted_dpo(config: DictConfig):
+def train_weighted_dpo(config: DictConfig, dynamic_params: Dict):
 # def main(config: DictConfig):
     """Main entry point for training. Validates config, creates/initializes model(s), and kicks off worker process(es)."""
 
     # Resolve hydra references, e.g. so we don't re-compute the run directory
     OmegaConf.resolve(config)
-    print(config)
-    config['check'] = 1
-    return
+    print(dynamic_params)
+    dynamic_params['check'] = 1
+    return dynamic_params
 
     missing_keys: Set[str] = OmegaConf.missing_keys(config)
     if missing_keys:
@@ -116,6 +116,6 @@ def train_weighted_dpo(config: DictConfig):
     else:
         print('starting single-process worker')
         worker_main(0, 1, config, policy, reference_model)
-# 
+#
 # if __name__ == '__main__':
 #     main()
