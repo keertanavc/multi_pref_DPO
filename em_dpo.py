@@ -22,21 +22,16 @@ import torch
 # def compute_posterior(policies):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(config: DictConfig):
+    # dict to pass around values by reference
+    dynamic_params = {}
     # initially all users are equally likely to be from any subgroup
-    weights_mat = torch.ones(config.num_groups, config.num_users) * (1 / config.num_groups)
-    # defaultdict(lambda: [1/config.num_groups] * config.num_groups)
-    # weights_init = defaultdict(lambda: [1/n] * n)
-    policies = []
-    pass_config = config
-    for group in range(pass_config.num_groups):
-        # passing weights by referenceß
-        pass_config['weights_mat'] = weights_mat
-        pass_config['group'] = group
-        # policies.append(train_weighted_dpo(config))
-        print(train_weighted_dpo(pass_config))
-        # weight_init = compute_posterior(policies)
-
-        # posterior_k = log(eta_k)
+    dynamic_params['weights_mat'] = torch.ones(config.num_groups, config.num_users) * (1 / config.num_groups)
+    # ensemble of policies
+    dynamic_params['policies'] = []
+    for group in range(config.num_groups):
+        dynamic_params['group'] = group
+        train_weighted_dpo(config, dynamic_params)
+        print(dynamic_params)
 
 
     # create function to calculate posterior
