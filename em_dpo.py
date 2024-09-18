@@ -27,12 +27,13 @@ def main(config: DictConfig):
     # defaultdict(lambda: [1/config.num_groups] * config.num_groups)
     # weights_init = defaultdict(lambda: [1/n] * n)
     policies = []
-    for group in range(config.num_groups):
+    pass_config = config
+    for group in range(pass_config.num_groups):
         # passing weights by referenceß
-        config['weights_mat'] = weights_mat
-        config['group'] = group
+        pass_config['weights_mat'] = weights_mat
+        pass_config['group'] = group
         # policies.append(train_weighted_dpo(config))
-        print(train_weighted_dpo(config))
+        print(train_weighted_dpo(pass_config))
         # weight_init = compute_posterior(policies)
 
         # posterior_k = log(eta_k)
