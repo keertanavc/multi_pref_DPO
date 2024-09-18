@@ -13,6 +13,7 @@ import json
 import socket
 from typing import Optional, Set
 import resource
+from typing import Optional, Dict, List, Union, Tuple
 
 
 OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
