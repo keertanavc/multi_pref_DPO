@@ -91,6 +91,10 @@ eval_every: 20_000
 # prevent wandb from logging more than once per minimum_log_interval_secs
 minimum_log_interval_secs: 1.0
 
+# number of users and population sub-groups
+num_users: 2
+num_groups: 2
+
 defaults:
 - _self_
 - model: blank_model_fp32 # basic model configuration
