@@ -177,6 +177,11 @@ class BasicTrainer(object):
         self.policy = policy
         self.reference_model = reference_model
 
+        # weighted DPO parameters
+        self.weights_dict = config.weights_dict
+        self.group = config.group
+        self.num_users = config.num_users
+
         self.train_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=config.n_epochs, n_examples=config.n_examples, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
         rank0_print(f'Loaded train data iterator')
         ###
@@ -203,6 +208,9 @@ class BasicTrainer(object):
             self.eval_data_names = None
         ###
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
+
+        self.posterior_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+        rank0_print(f'Loaded train data iterator for posterior computing')
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
@@ -433,6 +441,29 @@ class BasicTrainer(object):
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
+
+    def compute_posterior(self):
+        ''' Compute posterior for the E step for the given group '''
+        self.policy.eval()
+        mstep_likelihoods = np.zeros(num_users)
+        for batch in self.posterior_iterator:
+            local_eval_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
+            with torch.no_grad():
+                user_list = batch['human_label']
+                # hoping that config dict was passed by reference
+                # check this first please
+                # config.weights[user_list][group_number] += posterior_likelihood(batch)
+                # create posterior_likelihood function
+        batch_metrics = defaultdict(list)
+        for microbatch_idx in range(self.config.gradient_accumulation_steps):
+            global_microbatch = slice_and_move_batch_for_device(batch, microbatch_idx, self.config.gradient_accumulation_steps, self.rank)
+            local_microbatch = slice_and_move_batch_for_device(global_microbatch, self.rank, self.world_size, self.rank)
+            loss, metrics = self.get_batch_metrics(local_microbatch, self.config.loss, train=True)
+            (loss / self.config.gradient_accumulation_steps).backward()
+
+            for k, v in metrics.items():
+                batch_metrics[k].extend(v)
+
 
 
     def clip_gradient(self):
