@@ -20,9 +20,7 @@ import torch
 
 OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
 
-def compute_posterior(policies):
-
-
+# def compute_posterior(policies):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(config: DictConfig):
     # initially all users are equally likely to be from any subgroup
