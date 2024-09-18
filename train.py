@@ -22,7 +22,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
     if 'FSDP' in config.trainer:
         init_distributed(rank, world_size, port=config.fsdp_port)
-    
+
     if config.debug:
         wandb.init = lambda *args, **kwargs: None
         wandb.log = lambda *args, **kwargs: None
@@ -46,11 +46,14 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
-def main(config: DictConfig):
+def train_weighted_dpo(config: DictConfig):
     """Main entry point for training. Validates config, creates/initializes model(s), and kicks off worker process(es)."""
 
     # Resolve hydra references, e.g. so we don't re-compute the run directory
     OmegaConf.resolve(config)
+    print(config)
+    config['check'] = 1
+    return
 
     missing_keys: Set[str] = OmegaConf.missing_keys(config)
     if missing_keys:
@@ -75,7 +78,7 @@ def main(config: DictConfig):
     print('=' * 80)
     print(f'Writing to {socket.gethostname()}:{config.local_run_dir}')
     print('=' * 80)
- 
+
     os.environ['XDG_CACHE_HOME'] = get_local_dir(config.local_dirs)
     print('building policy')
     model_kwargs = {'device_map': 'balanced'} if config.trainer == 'BasicTrainer' else {}
@@ -101,7 +104,7 @@ def main(config: DictConfig):
         if config.loss.name in {'dpo', 'ipo'}:
             reference_model.load_state_dict(state_dict['state'])
         print('loaded pre-trained weights')
-    
+
     if 'FSDP' in config.trainer:
         world_size = torch.cuda.device_count()
         print('starting', world_size, 'processes for FSDP training')
@@ -113,6 +116,5 @@ def main(config: DictConfig):
         print('starting single-process worker')
         worker_main(0, 1, config, policy, reference_model)
 
-
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
