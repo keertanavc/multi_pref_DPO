@@ -25,7 +25,7 @@ def main(config: DictConfig):
     # dict to pass around values by reference
     dynamic_params = {}
     # initially all users are equally likely to be from any subgroup
-    dynamic_params['gamma'] = torch.zeros(config.num_groups, config.num_users)
+    dynamic_params['gamma'] = torch.ones(config.num_groups, config.num_users) * (1 / config.num_groups)
     dynamic_params['eta'] = torch.ones(config.num_groups) * (1 / config.num_groups)
     dynamic_params['policies'] = [] # ensemble of policies
     dynamic_params['log_numerator_gamma'] = torch.zeros(config.num_groups, config.num_users)
