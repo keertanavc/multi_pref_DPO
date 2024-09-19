@@ -25,14 +25,15 @@ def main(config: DictConfig):
     # dict to pass around values by reference
     dynamic_params = {}
     # initially all users are equally likely to be from any subgroup
-    dynamic_params['weights_mat'] = torch.ones(config.num_groups, config.num_users) * (1 / config.num_groups)
-    # ensemble of policies
-    dynamic_params['policies'] = []
+    dynamic_params['gamma'] = torch.zeros(config.num_groups, config.num_users)
+    dynamic_params['eta'] = torch.ones(config.num_groups) * (1 / config.num_groups)
+    dynamic_params['policies'] = [] # ensemble of policies
+    dynamic_params['log_numerator_gamma'] = torch.zeros(config.num_groups, config.num_users)
+    # train policy for each sub-group based on current weights
     for group in range(config.num_groups):
-        print(group)
         dynamic_params['group'] = group
+        # dynamic_params['likelihood_compute'] = torch.zeros(config.num_groups, config.num_users)
         train_weighted_dpo(config, dynamic_params)
-        print(dynamic_params)
 
 
     # create function to calculate posterior
