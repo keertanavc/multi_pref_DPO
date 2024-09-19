@@ -160,8 +160,10 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
     return data
 
 ###
-def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    weight_dict = {1 : 0, 2: 1} ## update this later
+def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
+    if weights_dict is None:
+        weights_dict = defaultdict(lambda: 1)
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_gpt2-large-imdb_multi-preference", split=split, cache_dir=cache_dir)
     print('done')
@@ -172,13 +174,14 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None)
         row_data['rejected_response'] = ex['rejected']
         row_data['pref_type'] = ex['pref_type']
         if 'pref_type' in ex: # UPDATE THIS!
-            row_data['weight'] = weight_dict[ex['pref_type']]
+            row_data['human_label'] = ex['pref_type']
+            row_data['weight'] = weights_dict[ex['pref_type']]
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
         row_data['rejected_response'] = row_data['rejected_response'].replace(substring_to_remove, "")
         return row_data
-        
+
     data = defaultdict(lambda: defaultdict(list))
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
         row_data = split_prompt_and_responses(row)
@@ -198,12 +201,12 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None)
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
         if 'weight' in row_data:
-            weight = row_data['weight']
-            data[prompt]['weight'].append(weight)
+            data[prompt]['weight'].append(row_data['weight'])
+            data[prompt]['human_label'].append(row_data['human_label'])
     return data
 ###
 
-def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = None):
+def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None):
     """Load the given dataset by name. Supported by default are 'shp', 'hh', and 'se'."""
     if name == 'shp':
         data = get_shp(split, silent=silent, cache_dir=cache_dir)
@@ -213,7 +216,7 @@ def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = No
         data = get_se(split, silent=silent, cache_dir=cache_dir)
     ###
     elif 'imdb' in name:
-        data = get_imdb(split, name, silent=silent, cache_dir=cache_dir)
+        data = get_imdb(split, name, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict)
     ###
     else:
         raise ValueError(f"Unknown dataset '{name}'")
@@ -252,7 +255,7 @@ def get_collate_fn(tokenizer) -> Callable[[List[Dict]], Dict[str, Union[List, to
                 padded_batch[k] = pad_sequence(to_pad, batch_first=True, padding_value=padding_value)
                 if 'prompt' in k:  # for the prompt, flip back so padding is on left side
                     padded_batch[k] = padded_batch[k].flip(dims=[1])
-            elif k == 'weight':
+            elif k == 'weight' or k == 'human_label':
                 padded_batch[k] = torch.tensor([ex[k] for ex in batch])
             else:
                 padded_batch[k] = [ex[k] for ex in batch]
@@ -260,7 +263,7 @@ def get_collate_fn(tokenizer) -> Callable[[List[Dict]], Dict[str, Union[List, to
     return collate_fn
 
 
-def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length: int, weight: int) -> Dict:
+def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length: int, weight: int, human_label: int) -> Dict:
     """Tokenize a single batch element.
 
        At this stage, we don't convert to PyTorch tensors yet; we just handle the truncation
@@ -317,6 +320,7 @@ def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_m
     batch['chosen_response_only'] = chosen
     batch['rejected_response_only'] = rejected
     batch['weight'] = weight ###
+    batch['human_label'] = human_label ###
 
     for k, toks in {'chosen': chosen_sequence_tokens, 'rejected': rejected_sequence_tokens, 'prompt': prompt_tokens}.items():
         for type_key, tokens in toks.items():
@@ -339,7 +343,8 @@ def get_batch_iterator(names: List[str],
                        n_examples: Optional[int] = None,
                        seed:int = 0,
                        silent: bool = False,
-                       cache_dir: Optional[str] = None) -> Iterator[Dict]:
+                       cache_dir: Optional[str] = None,
+                       weights_dict: Dict) -> Iterator[Dict]:
     """Get an iterator over batches of data. Stops after n_epochs or n_examples, whichever comes first.
 
     Args:
@@ -371,7 +376,7 @@ def get_batch_iterator(names: List[str],
             for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
                 ###
                 if 'weight' in data:
-                    flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight']))
+                    flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
                     include_weight = True
                 else:
                     ###
@@ -401,6 +406,7 @@ def get_batch_iterator(names: List[str],
             truncation_mode = row[4]
             if include_weight:
                 weight = [torch.tensor(i) for i in row[5]]
+                human_label = [torch.tensor(i) for i in row[6s]]
             if done:
                 break
             if sft_mode:
@@ -422,7 +428,7 @@ def get_batch_iterator(names: List[str],
                         break
                     if include_weight:
                         indx = int(min(p[0], p[1])/2)
-                        batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx])
+                        batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
                     else:
                         batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
                     batch.append(batch_element)
