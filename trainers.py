@@ -2,6 +2,8 @@ import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn.functional as F
 import torch.nn as nn
+from torch.nn import LogSoftmax
+from torch.nn import Softmax
 import transformers
 from omegaconf import DictConfig
 
@@ -165,6 +167,17 @@ class BasicTrainer(object):
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
+        # weighted DPO parameters
+        self.weights_dict = {}
+        for i in range(config.num_users):
+            self.weights_dict[i] = dynamic_params.gamma[dynamic_params.group_number, i]
+        self.num_users = config.num_users
+        self.num_groups = config.num_groups
+        self.group = dynamic_params.group
+        self.gamma = dynamic_params.gamma
+        self.log_numerator_gamma = dynamic_params.log_numerator_gamma
+        self.eta = dynamic_params.eta
+
         data_iterator_kwargs = dict(
             names=config.datasets,
             tokenizer=self.tokenizer,
@@ -172,21 +185,15 @@ class BasicTrainer(object):
             max_length=config.max_length,
             max_prompt_length=config.max_prompt_length,
             sft_mode=config.loss.name == 'sft',
+            weights_dict=self.weights_dict
         )
 
         self.policy = policy
         self.reference_model = reference_model
 
-        # weighted DPO parameters
-        self.weights_dict = config.weights_dict
-        self.group = config.group
-        self.num_users = config.num_users
-
         self.train_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=config.n_epochs, n_examples=config.n_examples, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
         rank0_print(f'Loaded train data iterator')
         ###
-        # self.eval_iterator = get_batch_iterator(**data_iterator_kwargs, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
-        # self.eval_batches = list(self.eval_iterator)
         self.eval_iterator = []
         self.eval_batches = []
         if 'imdb' in data_iterator_kwargs['names'][0]:
@@ -253,9 +260,8 @@ class BasicTrainer(object):
         return chosen_logps, rejected_logps
 
 
-    def get_batch_metrics(self, batch: Dict[str, Union[List, torch.LongTensor]], loss_config: DictConfig, train=True, imdb_pref=None):
+    def get_batch_metrics(self, batch: Dict[str, Union[List, torch.LongTensor]], loss_config: DictConfig, train=True, imdb_pref=None, weighted_loss=True):
         """Compute the SFT or DPO loss and other metrics for the given batch of inputs."""
-
         metrics = {}
         # train_test = 'train' if train else 'eval'
         if imdb_pref is None:
@@ -275,7 +281,7 @@ class BasicTrainer(object):
             else:
                 raise ValueError(f'unknown loss {loss_config.name}')
             ###
-            if 'weight' in batch:
+            if 'weight' in batch and weighted_loss:
                 loss_kwargs['weight'] = batch['weight']
             ###
             losses, chosen_rewards, rejected_rewards = preference_loss(
@@ -306,8 +312,9 @@ class BasicTrainer(object):
 
         all_devices_losses = all_gather_if_needed(losses.detach(), self.rank, self.world_size)
         metrics[f'loss/{train_test}'] = all_devices_losses.cpu().numpy().tolist()
+        print('loss length is', len(losses))
 
-        return losses.mean(), metrics
+        return losses.mean(), metrics, losses
 
     def train(self):
         """Begin either SFT or DPO training, with periodic evaluation."""
@@ -350,7 +357,7 @@ class BasicTrainer(object):
                     for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
-                            _, eval_metrics = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
+                            _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
 
                         for k, v in eval_metrics.items():
                             all_eval_metrics[k].extend(v)
@@ -409,7 +416,7 @@ class BasicTrainer(object):
             for microbatch_idx in range(self.config.gradient_accumulation_steps):
                 global_microbatch = slice_and_move_batch_for_device(batch, microbatch_idx, self.config.gradient_accumulation_steps, self.rank)
                 local_microbatch = slice_and_move_batch_for_device(global_microbatch, self.rank, self.world_size, self.rank)
-                loss, metrics = self.get_batch_metrics(local_microbatch, self.config.loss, train=True)
+                loss, metrics, _ = self.get_batch_metrics(local_microbatch, self.config.loss, train=True)
                 (loss / self.config.gradient_accumulation_steps).backward()
 
                 for k, v in metrics.items():
@@ -443,28 +450,20 @@ class BasicTrainer(object):
             #### END TRAINING ####
 
     def compute_posterior(self):
-        ''' Compute posterior for the E step for the given group '''
+        ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
-        mstep_likelihoods = np.zeros(num_users)
+        self.log_numerator_gamma[config.group, :] = torch.log(torch.tensor(self.eta[self.group]))
         for batch in self.posterior_iterator:
             local_eval_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
+            batch_metrics = defaultdict(list)
             with torch.no_grad():
-                user_list = batch['human_label']
-                # hoping that config dict was passed by reference
-                # check this first please
-                # config.weights[user_list][group_number] += posterior_likelihood(batch)
-                # create posterior_likelihood function
-        batch_metrics = defaultdict(list)
-        for microbatch_idx in range(self.config.gradient_accumulation_steps):
-            global_microbatch = slice_and_move_batch_for_device(batch, microbatch_idx, self.config.gradient_accumulation_steps, self.rank)
-            local_microbatch = slice_and_move_batch_for_device(global_microbatch, self.rank, self.world_size, self.rank)
-            loss, metrics = self.get_batch_metrics(local_microbatch, self.config.loss, train=True)
-            (loss / self.config.gradient_accumulation_steps).backward()
+                # reuse the loss function to compute the loss
+                # then add the log of that to the log_numerator_gamma to the corresponding user
+                _, _, losses = self.get_batch_metrics(batch, self.config.loss, train=True, weighted_loss=False)
+                users_list = batch['human_label']
 
-            for k, v in metrics.items():
-                batch_metrics[k].extend(v)
-
-
+    def update_eta_gamma(self):
+        self.gamma =
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
