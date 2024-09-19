@@ -454,16 +454,18 @@ class BasicTrainer(object):
         self.policy.eval()
         self.log_numerator_gamma[config.group, :] = torch.log(torch.tensor(self.eta[self.group]))
         for batch in self.posterior_iterator:
-            local_eval_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
-            batch_metrics = defaultdict(list)
+            local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
                 # reuse the loss function to compute the loss
                 # then add the log of that to the log_numerator_gamma to the corresponding user
-                _, _, losses = self.get_batch_metrics(batch, self.config.loss, train=True, weighted_loss=False)
-                users_list = batch['human_label']
+                _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
+                for i in range(len(losses)):
+                    label = local_batch['human_label'][i]
+                    self.log_numerator_gamma[config.group, label] += losses[i]
 
     def update_eta_gamma(self):
-        self.gamma =
+        self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
+        self.eta = torch.mean(self.gamma, dim=1)
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
