@@ -41,7 +41,6 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     TrainerClass = getattr(trainers, config.trainer)
     print(f'Creating trainer on process {rank} with world size {world_size}')
     trainer = TrainerClass(policy, config, config.seed, config.local_run_dir, reference_model=reference_model, rank=rank, world_size=world_size)
-
     trainer.train()
     trainer.save()
 
@@ -53,9 +52,6 @@ def train_weighted_dpo(config: DictConfig, dynamic_params: Dict):
 
     # Resolve hydra references, e.g. so we don't re-compute the run directory
     OmegaConf.resolve(config)
-    print(dynamic_params)
-    dynamic_params['check'] = 1
-    return dynamic_params
 
     missing_keys: Set[str] = OmegaConf.missing_keys(config)
     if missing_keys:
