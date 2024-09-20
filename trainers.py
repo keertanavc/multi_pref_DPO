@@ -455,12 +455,13 @@ class BasicTrainer(object):
     self.compute_posterior()
 
     # save models at the end of the EM algorithm
-    if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS'] - 1:
+    if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS']:
         self.save()
 
     # update etas and gammas at the end of one EM step
     if self.group == self.num_groups:
         self.dynamic_params['mstep_completed'] = True
+        print('m step completed for iteration', self.dynamic_params['em_iteration'])
         # inititate E step once M step is completed
         self.update_eta_gamma()
 
@@ -482,8 +483,10 @@ class BasicTrainer(object):
         '''Update gamma and eta after the end of EM steps'''
         self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
         self.eta = torch.mean(self.gamma, dim=1)
-        self.dynamic_params['em_iteration'] += 1
-
+        print('updated etas')
+        print(self.eta)
+        print('updated gammes')
+        print(self.gamma)
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
