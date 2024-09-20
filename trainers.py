@@ -168,12 +168,15 @@ class BasicTrainer(object):
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
         # weighted DPO parameters
+        self.dynamic_params = dynamic_params
         self.weights_dict = {}
         for i in range(config.num_users):
             self.weights_dict[i] = dynamic_params.gamma[dynamic_params.group_number, i]
         self.num_users = config.num_users
         self.num_groups = config.num_groups
         self.group = dynamic_params.group
+        if self.group == 0:
+            self.dynamic_params['mstep_completed'] = False
         self.gamma = dynamic_params.gamma
         self.log_numerator_gamma = dynamic_params.log_numerator_gamma
         self.eta = dynamic_params.eta
@@ -448,6 +451,18 @@ class BasicTrainer(object):
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
+    # compute values needed for the E-step
+    self.compute_posterior()
+
+    # save models at the end of the EM algorithm
+    if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS'] - 1:
+        self.save()
+
+    # update etas and gammas at the end of one EM step
+    if self.group == self.num_groups:
+        self.dynamic_params['mstep_completed'] = True
+        # inititate E step once M step is completed
+        self.update_eta_gamma()
 
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
@@ -464,8 +479,11 @@ class BasicTrainer(object):
                     self.log_numerator_gamma[config.group, label] += losses[i]
 
     def update_eta_gamma(self):
+        '''Update gamma and eta after the end of EM steps'''
         self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
         self.eta = torch.mean(self.gamma, dim=1)
+        self.dynamic_params['em_iteration'] += 1
+
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
