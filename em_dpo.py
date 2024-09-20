@@ -34,6 +34,7 @@ def main(config: DictConfig):
     # total number of iterations for the EM algorithm
     dynamic_params['TOTAL_ITERATIONS'] = 1
     for iter in range(dynamic_params['TOTAL_ITERATIONS']):
+        dynamic_params['em_iteration'] += 1
         # train policy for each sub-group based on current weights
         for group in range(config.num_groups):
             dynamic_params['group'] = group
