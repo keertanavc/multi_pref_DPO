@@ -406,7 +406,7 @@ def get_batch_iterator(names: List[str],
             truncation_mode = row[4]
             if include_weight:
                 weight = [torch.tensor(i) for i in row[5]]
-                human_label = [torch.tensor(i) for i in row[6s]]
+                human_label = [torch.tensor(i) for i in row[6]]
             if done:
                 break
             if sft_mode:
