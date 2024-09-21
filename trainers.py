@@ -170,10 +170,11 @@ class BasicTrainer(object):
         # weighted DPO parameters
         if dynamic_params:
             self.dynamic_params = dynamic_params
-            print(dynamic_params)
+            print(dynamic_params['gamma'])
+            print(dynamic_params['gamma'])
             self.weights_dict = {}
             for i in range(config.num_users):
-                self.weights_dict[i] = dynamic_params.gamma[dynamic_params.group_number, i]
+                self.weights_dict[i] = self.dynamic_params['gamma'][dynamic_params.group_number, i]
             self.num_users = config.num_users
             self.num_groups = config.num_groups
             self.group = dynamic_params.group
