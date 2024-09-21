@@ -344,7 +344,7 @@ def get_batch_iterator(names: List[str],
                        seed:int = 0,
                        silent: bool = False,
                        cache_dir: Optional[str] = None,
-                       weights_dict: Dict) -> Iterator[Dict]:
+                       weights_dict: Dict = {}) -> Iterator[Dict]:
     """Get an iterator over batches of data. Stops after n_epochs or n_examples, whichever comes first.
 
     Args:
