@@ -321,7 +321,6 @@ class BasicTrainer(object):
 
         all_devices_losses = all_gather_if_needed(losses.detach(), self.rank, self.world_size)
         metrics[f'loss/{train_test}'] = all_devices_losses.cpu().numpy().tolist()
-        print('loss length is', len(losses))
 
         return losses.mean(), metrics, losses
 
@@ -490,9 +489,9 @@ class BasicTrainer(object):
         '''Update gamma and eta after the end of EM steps'''
         self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
         self.eta = torch.mean(self.gamma, dim=1)
-        print('updated etas')
+        print('updated etas, new etas are')
         print(self.eta)
-        print('updated gammes')
+        print('updated gammes, new gammas are')
         print(self.gamma)
 
     def clip_gradient(self):
