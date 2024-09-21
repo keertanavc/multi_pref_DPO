@@ -451,19 +451,19 @@ class BasicTrainer(object):
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
-    # compute values needed for the E-step
-    self.compute_posterior()
+        # compute values needed for the E-step
+        self.compute_posterior()
 
-    # save models at the end of the EM algorithm
-    if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS']:
-        self.save()
+        # save models at the end of the EM algorithm
+        if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS']:
+            self.save()
 
-    # update etas and gammas at the end of one EM step
-    if self.group == self.num_groups:
-        self.dynamic_params['mstep_completed'] = True
-        print('m step completed for iteration', self.dynamic_params['em_iteration'])
-        # inititate E step once M step is completed
-        self.update_eta_gamma()
+        # update etas and gammas at the end of one EM step
+        if self.group == self.num_groups:
+            self.dynamic_params['mstep_completed'] = True
+            print('m step completed for iteration', self.dynamic_params['em_iteration'])
+            # inititate E step once M step is completed
+            self.update_eta_gamma()
 
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
