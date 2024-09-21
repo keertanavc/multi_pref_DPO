@@ -18,7 +18,7 @@ from typing import Optional, Dict, List, Union, Tuple
 
 OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
 
-def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Module, reference_model: Optional[nn.Module] = None):
+def worker_main(rank: int, dynamic_params:Dict, world_size: int, config: DictConfig, policy: nn.Module, reference_model: Optional[nn.Module] = None):
     """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
     if 'FSDP' in config.trainer:
         init_distributed(rank, world_size, port=config.fsdp_port)
@@ -39,7 +39,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
     TrainerClass = getattr(trainers, config.trainer)
     print(f'Creating trainer on process {rank} with world size {world_size}')
-    trainer = TrainerClass(policy, config, config.seed, config.local_run_dir, reference_model=reference_model, rank=rank, world_size=world_size)
+    trainer = TrainerClass(policy, config, dynamic_params, config.seed, config.local_run_dir, reference_model=reference_model, rank=rank, world_size=world_size)
     trainer.train()
     trainer.save()
 
@@ -108,10 +108,11 @@ def train_weighted_dpo(config: DictConfig, dynamic_params: Dict):
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
         print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
-        mp.spawn(worker_main, nprocs=world_size, args=(world_size, config, policy, reference_model), join=True)
+        mp.spawn(worker_main, nprocs=world_size, args=(dynamic_params, world_size, config, policy, reference_model), join=True)
+        # def worker_main(rank: int, dynamic_params:Dict, world_size: int, config: DictConfig, policy: nn.Module, reference_model: Optional[nn.Module] = None):
     else:
         print('starting single-process worker')
-        worker_main(0, 1, config, policy, reference_model)
+        worker_main(0, 1, dynamic_params, config, policy, reference_model)
 #
 # if __name__ == '__main__':
 #     main()
