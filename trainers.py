@@ -173,13 +173,13 @@ class BasicTrainer(object):
             print(dynamic_params['gamma'])
             print(dynamic_params['gamma'])
             self.weights_dict = {}
-            for i in range(config.num_users):
-                self.weights_dict[i] = self.dynamic_params['gamma'][self.dynamic_params['group_number'], i]
             self.num_users = config.num_users
             self.num_groups = config.num_groups
             self.group = self.dynamic_params['group']
             if self.group == 0:
                 self.dynamic_params['mstep_completed'] = False
+            for i in range(config.num_users):
+                self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
             self.gamma = self.dynamic_params['gamma']
             self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma']
             self.eta = self.dynamic_params['eta']
@@ -475,7 +475,7 @@ class BasicTrainer(object):
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
-        self.log_numerator_gamma[config.group, :] = torch.log(torch.tensor(self.eta[self.group]))
+        self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
         for batch in self.posterior_iterator:
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
@@ -484,7 +484,7 @@ class BasicTrainer(object):
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i]
-                    self.log_numerator_gamma[config.group, label] += losses[i]
+                    self.log_numerator_gamma[self.group, label] += losses[i]
 
     def update_eta_gamma(self):
         '''Update gamma and eta after the end of EM steps'''
