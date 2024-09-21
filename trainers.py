@@ -174,15 +174,15 @@ class BasicTrainer(object):
             print(dynamic_params['gamma'])
             self.weights_dict = {}
             for i in range(config.num_users):
-                self.weights_dict[i] = self.dynamic_params['gamma'][dynamic_params.group_number, i]
+                self.weights_dict[i] = self.dynamic_params['gamma'][self.dynamic_params['group_number'], i]
             self.num_users = config.num_users
             self.num_groups = config.num_groups
-            self.group = dynamic_params.group
+            self.group = self.dynamic_params['group']
             if self.group == 0:
                 self.dynamic_params['mstep_completed'] = False
-            self.gamma = dynamic_params.gamma
-            self.log_numerator_gamma = dynamic_params.log_numerator_gamma
-            self.eta = dynamic_params.eta
+            self.gamma = self.dynamic_params['gamma']
+            self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma']
+            self.eta = self.dynamic_params['eta']
         else:
             self.dynamic_params = None
 
