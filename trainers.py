@@ -149,7 +149,7 @@ def concatenated_inputs(batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict
 
 
 class BasicTrainer(object):
-    def __init__(self, policy: nn.Module, config: DictConfig, dynamic_params:Dict, seed: int, run_dir: str, reference_model: Optional[nn.Module] = None, rank: int = 0, world_size: int = 1):
+    def __init__(self, policy: nn.Module, config: DictConfig, seed: int, run_dir: str, reference_model: Optional[nn.Module] = None, rank: int = 0, world_size: int = 1, dynamic_params:Dict = None):
         """A trainer for a language model, supporting either SFT or DPO training.
 
            If multiple GPUs are present, naively splits the model across them, effectively
@@ -168,18 +168,21 @@ class BasicTrainer(object):
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
         # weighted DPO parameters
-        self.dynamic_params = dynamic_params
-        self.weights_dict = {}
-        for i in range(config.num_users):
-            self.weights_dict[i] = dynamic_params.gamma[dynamic_params.group_number, i]
-        self.num_users = config.num_users
-        self.num_groups = config.num_groups
-        self.group = dynamic_params.group
-        if self.group == 0:
-            self.dynamic_params['mstep_completed'] = False
-        self.gamma = dynamic_params.gamma
-        self.log_numerator_gamma = dynamic_params.log_numerator_gamma
-        self.eta = dynamic_params.eta
+        if dynamic_params:
+            self.dynamic_params = dynamic_params
+            self.weights_dict = {}
+            for i in range(config.num_users):
+                self.weights_dict[i] = dynamic_params.gamma[dynamic_params.group_number, i]
+            self.num_users = config.num_users
+            self.num_groups = config.num_groups
+            self.group = dynamic_params.group
+            if self.group == 0:
+                self.dynamic_params['mstep_completed'] = False
+            self.gamma = dynamic_params.gamma
+            self.log_numerator_gamma = dynamic_params.log_numerator_gamma
+            self.eta = dynamic_params.eta
+        else:
+            self.dynamic_params = None
 
         data_iterator_kwargs = dict(
             names=config.datasets,
@@ -219,8 +222,9 @@ class BasicTrainer(object):
         ###
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
 
-        self.posterior_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
-        rank0_print(f'Loaded train data iterator for posterior computing')
+        if self.dynamic_params:
+            self.posterior_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+            rank0_print(f'Loaded train data iterator for posterior computing')
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
@@ -451,19 +455,20 @@ class BasicTrainer(object):
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
-        # compute values needed for the E-step
-        self.compute_posterior()
+        if self.dynamic_params:
+            # compute values needed for the E-step
+            self.compute_posterior()
 
-        # save models at the end of the EM algorithm
-        if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS']:
-            self.save()
+            # save models at the end of the EM algorithm
+            if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS']:
+                self.save()
 
-        # update etas and gammas at the end of one EM step
-        if self.group == self.num_groups:
-            self.dynamic_params['mstep_completed'] = True
-            print('m step completed for iteration', self.dynamic_params['em_iteration'])
-            # inititate E step once M step is completed
-            self.update_eta_gamma()
+            # update etas and gammas at the end of one EM step
+            if self.group == self.num_groups:
+                self.dynamic_params['mstep_completed'] = True
+                print('m step completed for iteration', self.dynamic_params['em_iteration'])
+                # inititate E step once M step is completed
+                self.update_eta_gamma()
 
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
@@ -522,14 +527,14 @@ class BasicTrainer(object):
 
 
 class FSDPTrainer(BasicTrainer):
-    def __init__(self, policy: nn.Module, config: DictConfig, seed: int, run_dir: str, reference_model: Optional[nn.Module] = None, rank: int = 0, world_size: int = 1):
+    def __init__(self, policy: nn.Module, config: DictConfig, seed: int, run_dir: str, reference_model: Optional[nn.Module] = None, rank: int = 0, world_size: int = 1, dynamic_params: Optional[Dict] = None):
         """A trainer subclass that uses PyTorch FSDP to shard the model across multiple GPUs.
 
            This trainer will shard both the policy and reference model across all available GPUs.
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(policy, config, seed, run_dir, reference_model, rank, world_size)
+        super().__init__(policy, config, seed, run_dir, reference_model, rank, world_size, dynamic_params)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
 
         wrap_class = get_block_class_from_model(policy, config.model.block_name)
@@ -615,13 +620,13 @@ class FSDPTrainer(BasicTrainer):
 
 
 class TensorParallelTrainer(BasicTrainer):
-    def __init__(self, policy, config, seed, run_dir, reference_model=None, rank=0, world_size=1):
+    def __init__(self, policy, config, seed, run_dir, reference_model=None, rank=0, world_size=1, dynamic_params=None):
         """A trainer subclass that uses TensorParallel to shard the model across multiple GPUs.
 
            Based on https://github.com/BlackSamorez/tensor_parallel. Note sampling is extremely slow,
               see https://github.com/BlackSamorez/tensor_parallel/issues/66.
         """
-        super().__init__(policy, config, seed, run_dir, reference_model, rank, world_size)
+        super().__init__(policy, config, seed, run_dir, reference_model, rank, world_size, dynamic_params)
 
         rank0_print('Sharding policy...')
         self.policy = tp.tensor_parallel(policy, sharded=True)
