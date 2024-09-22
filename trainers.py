@@ -483,7 +483,7 @@ class BasicTrainer(object):
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i]
-                    self.log_numerator_gamma[self.group, label] += losses[i]
+                    self.log_numerator_gamma[self.group, label-1] += losses[i] ## update this depending on user labels
 
     def update_eta_gamma(self):
         '''Update gamma and eta after the end of EM steps'''
