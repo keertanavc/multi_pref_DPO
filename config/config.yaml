@@ -95,6 +95,9 @@ minimum_log_interval_secs: 1.0
 num_users: 2
 num_groups: 2
 
+# no of iterations of the em algorithm
+em_steps: 1
+
 defaults:
 - _self_
 - model: blank_model_fp32 # basic model configuration
