@@ -32,7 +32,7 @@ def main(config: DictConfig):
     # check if current mstep for the EM step is completed
     dynamic_params['mstep_completed'] = False
     # total number of iterations for the EM algorithm
-    dynamic_params['TOTAL_ITERATIONS'] = 1
+    dynamic_params['TOTAL_ITERATIONS'] = config.em_steps
     for iter in range(dynamic_params['TOTAL_ITERATIONS']):
         dynamic_params['em_iteration'] += 1
         # train policy for each sub-group based on current weights
