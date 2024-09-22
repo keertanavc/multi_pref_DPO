@@ -489,10 +489,15 @@ class BasicTrainer(object):
         '''Update gamma and eta after the end of EM steps'''
         self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
         self.eta = torch.mean(self.gamma, dim=1)
+
         print('updated etas, new etas are')
         print(self.eta)
         print('updated gammes, new gammas are')
         print(self.gamma)
+        em_metrics = {}
+        for i in range(self.num_groups):
+            em_metrics[i] = self.eta[i]
+        wandb.log(em_metrics, step=self.example_counter)
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
