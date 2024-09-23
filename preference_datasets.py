@@ -375,6 +375,8 @@ def get_batch_iterator(names: List[str],
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
                     assert (len(data['weight']) == len(data['pairs'])/2) and (len(data['human_label']) == len(data['pairs'])/2)
                     flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
+                    print(data['weight'])
+                    print(data['human_label'])
                     include_weight = True
             else:
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
@@ -407,9 +409,6 @@ def get_batch_iterator(names: List[str],
                 weight = [torch.tensor(i) for i in row[5]]
                 # human_label = [i.clone().detach() for i in row[6]]
                 human_label = [torch.tensor(i) for i in row[6]]
-            print(pairs)
-            print(weight)
-            print(human_label)
             if done:
                 break
             if sft_mode:
