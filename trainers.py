@@ -463,7 +463,7 @@ class BasicTrainer(object):
                 self.save()
 
             # update etas and gammas at the end of one EM step
-            if self.group == self.num_groups:
+            if self.group == self.num_groups - 1:
                 self.dynamic_params['mstep_completed'] = True
                 print('m step completed for iteration', self.dynamic_params['em_iteration'])
                 # inititate E step once M step is completed
