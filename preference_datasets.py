@@ -192,7 +192,7 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         data[prompt]['sft_target'] = chosen
         if 'pref_type' in row_data:
             pref_type = row_data['pref_type']
-            human_label = ow_data['human_label']
+            human_label = row_data['human_label']
             data[prompt]['pref_type'].append(pref_type)
             data[prompt]['human_label'].append(human_label)
             if name == 'imdb_correctness':
