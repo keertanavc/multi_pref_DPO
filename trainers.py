@@ -165,8 +165,6 @@ class BasicTrainer(object):
         self.world_size = world_size
         self.config = config
         self.run_dir = run_dir
-        if self.rank == 0 and self.config.wandb.enabled:
-            self.start_wandb()
 
         tokenizer_name_or_path = config.model.tokenizer_name_or_path or config.model.name_or_path
         rank0_print(f'Loading tokenizer {tokenizer_name_or_path}')
@@ -190,7 +188,8 @@ class BasicTrainer(object):
             self.eta = self.dynamic_params['eta']
         else:
             self.dynamic_params = None
-
+        if self.rank == 0 and self.config.wandb.enabled:
+            self.start_wandb()
         data_iterator_kwargs = dict(
             names=config.datasets,
             tokenizer=self.tokenizer,
