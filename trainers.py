@@ -170,8 +170,6 @@ class BasicTrainer(object):
         # weighted DPO parameters
         if dynamic_params:
             self.dynamic_params = dynamic_params
-            print(dynamic_params['gamma'])
-            print(dynamic_params['gamma'])
             self.weights_dict = {}
             self.num_users = config.num_users
             self.num_groups = config.num_groups
