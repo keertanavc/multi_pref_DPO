@@ -160,6 +160,8 @@ class BasicTrainer(object):
         self.world_size = world_size
         self.config = config
         self.run_dir = run_dir
+        if self.rank == 0 and self.config.wandb.enabled:
+            self.start_wandb()
 
         tokenizer_name_or_path = config.model.tokenizer_name_or_path or config.model.name_or_path
         rank0_print(f'Loading tokenizer {tokenizer_name_or_path}')
@@ -225,6 +227,21 @@ class BasicTrainer(object):
         if self.dynamic_params:
             self.posterior_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
             rank0_print(f'Loaded train data iterator for posterior computing')
+
+    def start_wandb(self):
+        ''' Initiate wandb logging '''
+        os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
+        wandb.init(
+            entity=self.config.wandb.entity,
+            project=self.config.wandb.project,
+            config=OmegaConf.to_container(self.config),
+            dir=get_local_dir(self.config.local_dirs),
+            name=self.config.exp_name,
+        )
+
+    def end_wandb(self):
+        ''' Terminate wandb logging '''
+        wandb.finish()
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
@@ -454,6 +471,7 @@ class BasicTrainer(object):
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
+
         if self.dynamic_params:
             # compute values needed for the E-step
             self.compute_posterior()
@@ -468,6 +486,8 @@ class BasicTrainer(object):
                 print('m step completed for iteration', self.dynamic_params['em_iteration'])
                 # inititate E step once M step is completed
                 self.update_eta_gamma()
+
+        self.end_wandb()
 
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
