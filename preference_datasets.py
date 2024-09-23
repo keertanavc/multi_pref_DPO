@@ -177,6 +177,7 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
         row_data['rejected_response'] = row_data['rejected_response'].replace(substring_to_remove, "")
+        print(row_data)
         return row_data
 
     data = defaultdict(lambda: defaultdict(list))
@@ -201,10 +202,10 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
             data[prompt]['pref_type'].append(pref_type)
             data[prompt]['human_label'].append(row_data['human_label'])
             data[prompt]['weight'].append(row_data['weight'])
-        print(data[prompt]['pairs'])
-        print(data[prompt]['pref_type'])
-        print(data[prompt]['human_label'])
-        print(data[prompt]['weight'])
+        # print(data[prompt]['pairs'])
+        # print(data[prompt]['pref_type'])
+        # print(data[prompt]['human_label'])
+        # print(data[prompt]['weight'])
     return data
 ###
 
