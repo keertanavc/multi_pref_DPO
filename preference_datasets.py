@@ -400,12 +400,16 @@ def get_batch_iterator(names: List[str],
             prompt = row[0]
             responses = row[1]
             pairs = row[2]
-            print(pairs)
             sft_target = row[3]
             truncation_mode = row[4]
             if include_weight:
-                weight = [torch.tensor(i) for i in row[5]]
-                human_label = [torch.tensor(i) for i in row[6]]
+                weight = [i.clone().detach() for i in row[5]]
+                # weight = [torch.tensor(i) for i in row[5]]
+                human_label = [i.clone().detach() for i in row[6]]
+                # human_label = [torch.tensor(i) for i in row[6]]
+            print(pairs)
+            print(weight)
+            print(human_label)
             if done:
                 break
             if sft_mode:
@@ -419,7 +423,6 @@ def get_batch_iterator(names: List[str],
                         if not silent:
                             print(f'Finished generating {n_examples} examples on {split} split')
                         done = True
-
                     batch = []
             else:
                 for p in pairs:
