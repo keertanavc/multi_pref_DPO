@@ -116,7 +116,6 @@ def get_shp(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str
 
     return data
 
-
 def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     """Load the Anthropic Helpful-Harmless dataset from Huggingface and convert it to the necessary format.
 
@@ -162,20 +161,19 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
 ###
 def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
-    if weights_dict is None:
-        weights_dict = defaultdict(lambda: 1)
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_gpt2-large-imdb_multi-preference", split=split, cache_dir=cache_dir)
+    dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference", split=split, cache_dir=cache_dir)
     print('done')
     def split_prompt_and_responses(ex):
         row_data = {}
-        row_data['prompt'] = ex['text']
+        row_data['prompt'] = ex['prompt']
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
-        row_data['pref_type'] = ex['pref_type']
-        if 'pref_type' in ex: # UPDATE THIS!
-            row_data['human_label'] = ex['pref_type']
-            row_data['weight'] = weights_dict[ex['pref_type']]
+        if 'pref_type' in row_data:
+            row_data['pref_type'] = ex['pref_type']
+            row_data['human_label'] = ex['human_label']
+        if weights_dict:
+            row_data['weight'] = weights_dict['human_label']
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
@@ -189,19 +187,19 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         chosen = row_data['chosen_response']
         rejected = row_data['rejected_response']
         pref_type = row_data['pref_type']
-        if name == 'imdb_sentiment':
-            if pref_type == 2:
+        if name == 'imdb_correctness':
+            if pref_type == 1:
                 continue
         if name == 'imdb_length':
-            if pref_type == 1:
+            if pref_type == 2:
                 continue
         responses = [chosen, rejected]
         n_responses = len(data[prompt]['responses'])
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
-        if 'weight' in row_data:
-            data[prompt]['weight'].append(row_data['weight'])
+        if 'pref_type' in row_data:
+            data[prompt]['pref_type'].append(row_data['pref_type'])
             data[prompt]['human_label'].append(row_data['human_label'])
     return data
 ###
@@ -344,7 +342,7 @@ def get_batch_iterator(names: List[str],
                        seed:int = 0,
                        silent: bool = False,
                        cache_dir: Optional[str] = None,
-                       weights_dict: Dict = {}) -> Iterator[Dict]:
+                       weights_dict: Dict = None) -> Iterator[Dict]:
     """Get an iterator over batches of data. Stops after n_epochs or n_examples, whichever comes first.
 
     Args:
@@ -373,13 +371,12 @@ def get_batch_iterator(names: List[str],
         include_weight = False
         for name in names:
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
-            for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
-                ###
-                if 'weight' in data:
+            if weights_dict:
+                for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
                     flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
                     include_weight = True
-                else:
-                    ###
+            else:
+                for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
                     flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode))
 
     collate_fn = get_collate_fn(tokenizer)
