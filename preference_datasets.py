@@ -186,9 +186,9 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         chosen = row_data['chosen_response']
         rejected = row_data['rejected_response']
         responses = [chosen, rejected]
+        data[prompt]['responses'].extend(responses)
         n_responses = len(data[prompt]['responses'])
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
-        data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
         if 'pref_type' in row_data:
             pref_type = row_data['pref_type']
