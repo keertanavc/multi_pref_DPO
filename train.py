@@ -27,15 +27,15 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
         wandb.init = lambda *args, **kwargs: None
         wandb.log = lambda *args, **kwargs: None
 
-    if rank == 0 and config.wandb.enabled:
-        os.environ['WANDB_CACHE_DIR'] = get_local_dir(config.local_dirs)
-        wandb.init(
-            entity=config.wandb.entity,
-            project=config.wandb.project,
-            config=OmegaConf.to_container(config),
-            dir=get_local_dir(config.local_dirs),
-            name=config.exp_name,
-        )
+    # if rank == 0 and config.wandb.enabled:
+    #     os.environ['WANDB_CACHE_DIR'] = get_local_dir(config.local_dirs)
+    #     wandb.init(
+    #         entity=config.wandb.entity,
+    #         project=config.wandb.project,
+    #         config=OmegaConf.to_container(config),
+    #         dir=get_local_dir(config.local_dirs),
+    #         name=config.exp_name,
+    #     )
 
     TrainerClass = getattr(trainers, config.trainer)
     print(f'Creating trainer on process {rank} with world size {world_size}')
