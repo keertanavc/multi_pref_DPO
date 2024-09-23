@@ -2,7 +2,8 @@ import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
 import transformers
-from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
+# from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
+from utils import get_local_dir, disable_dropout, init_distributed, get_open_port
 import os
 import hydra
 import torch.multiprocessing as mp
@@ -16,7 +17,7 @@ import resource
 from typing import Optional, Dict, List, Union, Tuple
 
 
-OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
+# OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
 
 def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Module, reference_model: Optional[nn.Module] = None, dynamic_params:Dict = None):
     """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
