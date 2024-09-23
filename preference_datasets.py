@@ -373,6 +373,9 @@ def get_batch_iterator(names: List[str],
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
             if weights_dict:
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
+                    print(len(data['pairs']))
+                    print(data['weight'])
+                    print(data['human_label'])
                     flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
                     include_weight = True
             else:
@@ -424,9 +427,6 @@ def get_batch_iterator(names: List[str],
                     if done:
                         break
                     if include_weight:
-                        print(p)
-                        print(weight)
-                        print(human_label)
                         indx = int(min(p[0], p[1])/2)
                         batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
                     else:
