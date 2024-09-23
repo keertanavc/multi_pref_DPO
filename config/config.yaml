@@ -92,7 +92,7 @@ eval_every: 20_000
 minimum_log_interval_secs: 1.0
 
 # number of users and population sub-groups
-num_users: 2
+num_users: 50
 num_groups: 2
 
 # no of iterations of the em algorithm
