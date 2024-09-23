@@ -241,7 +241,7 @@ class BasicTrainer(object):
             project=self.config.wandb.project,
             config=OmegaConf.to_container(self.config),
             dir=get_local_dir(self.config.local_dirs),
-            name=self.config.exp_name,
+            name=self.config.exp_name + '_group' + str(self.group) + '_emstep' + str(self.dynamic_params['em_iteration']),
         )
 
     def end_wandb(self):
