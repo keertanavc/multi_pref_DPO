@@ -190,7 +190,6 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
-        print(data[prompt]['pairs'])
         if 'pref_type' in row_data:
             pref_type = row_data['pref_type']
             if name == 'imdb_correctness':
@@ -376,6 +375,7 @@ def get_batch_iterator(names: List[str],
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
                     assert (len(data['weight']) == len(data['pairs'])/2) and (len(data['human_label']) == len(data['pairs'])/2)
                     flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
+                    print(data['pairs'])
                     include_weight = True
             else:
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
