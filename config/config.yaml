@@ -96,7 +96,7 @@ num_users: 20
 num_groups: 2
 
 # no of iterations of the em algorithm
-em_steps: 1
+em_steps: 50
 
 defaults:
 - _self_

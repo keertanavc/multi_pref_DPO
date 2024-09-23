@@ -222,9 +222,9 @@ class BasicTrainer(object):
         ###
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
 
-        # if self.dynamic_params:
-        self.posterior_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
-        rank0_print(f'Loaded train data iterator for posterior computing')
+        if self.dynamic_params:
+            self.posterior_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+            rank0_print(f'Loaded train data iterator for posterior computing')
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
