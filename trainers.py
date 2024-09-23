@@ -5,7 +5,8 @@ import torch.nn as nn
 from torch.nn import LogSoftmax
 from torch.nn import Softmax
 import transformers
-from omegaconf import DictConfig
+# from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig
 
 import torch.distributed as dist
 from torch.distributed.fsdp import (
@@ -44,6 +45,7 @@ import functools
 from typing import Optional, Dict, List, Union, Tuple
 from copy import deepcopy
 
+OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
 
 def preference_loss(policy_chosen_logps: torch.FloatTensor,
                     policy_rejected_logps: torch.FloatTensor,
