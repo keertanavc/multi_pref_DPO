@@ -169,11 +169,11 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['prompt'] = ex['prompt']
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
+        print(row_data.keys())
+        print(row_data.keys())
         if 'pref_type' in row_data:
             row_data['pref_type'] = ex['pref_type']
             row_data['human_label'] = ex['human_label']
-            print('pref_type')
-            print(row_data['pref_type'])
             row_data['weight'] = weights_dict[int(row_data['human_label'])]
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
