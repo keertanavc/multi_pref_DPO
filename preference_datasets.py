@@ -169,10 +169,10 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['prompt'] = ex['prompt']
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
-        # if 'pref_type' in ex:
         row_data['pref_type'] = ex['pref_type']
         row_data['human_label'] = ex['human_label']
         row_data['weight'] = weights_dict[int(ex['human_label'])]
+
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
@@ -190,7 +190,6 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
-        # if 'pref_type' in row_data:
         pref_type = row_data['pref_type']
         data[prompt]['pref_type'].append(pref_type)
         data[prompt]['human_label'].append(row_data['human_label'])
@@ -374,14 +373,14 @@ def get_batch_iterator(names: List[str],
         include_weight = False
         for name in names:
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
-            if weights_dict:
-                for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
-                    assert (len(data['weight']) == len(data['pairs'])) and (len(data['human_label']) == len(data['pairs']))
-                    flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
-                    include_weight = True
-            else:
-                for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
-                    flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode))
+            # if weights_dict:
+            for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
+                assert (len(data['weight']) == len(data['pairs'])) and (len(data['human_label']) == len(data['pairs']))
+                flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
+                # include_weight = True
+            # else:
+            #     for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
+            #         flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode))
 
     collate_fn = get_collate_fn(tokenizer)
 
@@ -405,11 +404,9 @@ def get_batch_iterator(names: List[str],
             pairs = row[2]
             sft_target = row[3]
             truncation_mode = row[4]
-            if include_weight:
-                # weight = [i.clone().detach() for i in row[5]]
-                weight = [torch.tensor(i) for i in row[5]]
-                # human_label = [i.clone().detach() for i in row[6]]
-                human_label = [torch.tensor(i) for i in row[6]]
+            # if include_weight:
+            weight = [torch.tensor(i) for i in row[5]]
+            human_label = [torch.tensor(i) for i in row[6]]
             if done:
                 break
             if sft_mode:
@@ -428,11 +425,11 @@ def get_batch_iterator(names: List[str],
                 for p in pairs:
                     if done:
                         break
-                    if include_weight:
-                        indx = int(min(p[0], p[1])/2)
-                        batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
-                    else:
-                        batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
+                    # if include_weight:
+                    indx = int(min(p[0], p[1])/2)
+                    batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
+                    # else:
+                    #     batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
                     batch.append(batch_element)
                     example_idx += 1
                     if len(batch) == batch_size:
