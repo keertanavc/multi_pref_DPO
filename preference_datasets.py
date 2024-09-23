@@ -169,13 +169,10 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['prompt'] = ex['prompt']
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
-        print('row_data.keys()')
-        print(row_data.keys())
-        print(row_data.keys())
-        if 'pref_type' in row_data:
+        if 'pref_type' in ex:
             row_data['pref_type'] = ex['pref_type']
             row_data['human_label'] = ex['human_label']
-            row_data['weight'] = weights_dict[int(row_data['human_label'])]
+            row_data['weight'] = weights_dict[int(ex['human_label'])]
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
@@ -184,13 +181,10 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
 
     data = defaultdict(lambda: defaultdict(list))
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
-        print('row is')
-        print(row)
         row_data = split_prompt_and_responses(row)
         prompt = row_data['prompt']
         chosen = row_data['chosen_response']
         rejected = row_data['rejected_response']
-        pref_type = row_data['pref_type']
         if name == 'imdb_correctness':
             if pref_type == 1:
                 continue
