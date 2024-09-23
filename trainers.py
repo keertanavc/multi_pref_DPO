@@ -84,8 +84,8 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
     else:
         # Eq. 3 https://ericmitchell.ai/cdpo.pdf; label_smoothing=0 gives original DPO (Eq. 7 of https://arxiv.org/pdf/2305.18290.pdf)
         losses = -F.logsigmoid(beta * logits) * (1 - label_smoothing) - F.logsigmoid(-beta * logits) * label_smoothing
-        # if weight.numel() > 0: ###
-        losses *= weight ###
+        if weight.numel() > 0: ###
+            losses *= weight ###
 
     chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
     rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
@@ -168,23 +168,23 @@ class BasicTrainer(object):
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
         # weighted DPO parameters
-        # if dynamic_params:
-        self.dynamic_params = dynamic_params
-        print(dynamic_params['gamma'])
-        print(dynamic_params['gamma'])
-        self.weights_dict = {}
-        self.num_users = config.num_users
-        self.num_groups = config.num_groups
-        self.group = self.dynamic_params['group']
-        if self.group == 0:
-            self.dynamic_params['mstep_completed'] = False
-        for i in range(config.num_users):
-            self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
-        self.gamma = self.dynamic_params['gamma']
-        self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma']
-        self.eta = self.dynamic_params['eta']
-        # else:
-        #     self.dynamic_params = None
+        if dynamic_params:
+            self.dynamic_params = dynamic_params
+            print(dynamic_params['gamma'])
+            print(dynamic_params['gamma'])
+            self.weights_dict = {}
+            self.num_users = config.num_users
+            self.num_groups = config.num_groups
+            self.group = self.dynamic_params['group']
+            if self.group == 0:
+                self.dynamic_params['mstep_completed'] = False
+            for i in range(config.num_users):
+                self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
+            self.gamma = self.dynamic_params['gamma']
+            self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma']
+            self.eta = self.dynamic_params['eta']
+        else:
+            self.dynamic_params = None
 
         data_iterator_kwargs = dict(
             names=config.datasets,
