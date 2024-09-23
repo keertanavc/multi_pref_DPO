@@ -201,6 +201,10 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
             data[prompt]['pref_type'].append(pref_type)
             data[prompt]['human_label'].append(row_data['human_label'])
             data[prompt]['weight'].append(row_data['weight'])
+        print(data[prompt]['pairs'])
+        print(data[prompt]['pref_type'])
+        print(data[prompt]['human_label'])
+        print(data[prompt]['weight'])
     return data
 ###
 
@@ -373,10 +377,8 @@ def get_batch_iterator(names: List[str],
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
             if weights_dict:
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
-                    assert (len(data['weight']) == len(data['pairs'])/2) and (len(data['human_label']) == len(data['pairs'])/2)
+                    assert (len(data['weight']) == len(data['pairs'])) and (len(data['human_label']) == len(data['pairs']))
                     flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
-                    print(data['weight'])
-                    print(data['human_label'])
                     include_weight = True
             else:
                 for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
