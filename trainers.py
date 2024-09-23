@@ -483,8 +483,8 @@ class BasicTrainer(object):
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i]
-                    label.to(self.log_numerator_gamma.device)
-                    losses.to(self.log_numerator_gamma.device)
+                    label = label.to(self.log_numerator_gamma.device)
+                    losses = losses.to(self.log_numerator_gamma.device)
                     self.log_numerator_gamma[self.group, label-1] += losses[i] ## update this depending on user labels
 
     def update_eta_gamma(self):
