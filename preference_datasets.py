@@ -403,10 +403,10 @@ def get_batch_iterator(names: List[str],
             sft_target = row[3]
             truncation_mode = row[4]
             if include_weight:
-                weight = [i.clone().detach() for i in row[5]]
-                # weight = [torch.tensor(i) for i in row[5]]
-                human_label = [i.clone().detach() for i in row[6]]
-                # human_label = [torch.tensor(i) for i in row[6]]
+                # weight = [i.clone().detach() for i in row[5]]
+                weight = [torch.tensor(i) for i in row[5]]
+                # human_label = [i.clone().detach() for i in row[6]]
+                human_label = [torch.tensor(i) for i in row[6]]
             print(pairs)
             print(weight)
             print(human_label)
