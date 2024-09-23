@@ -172,8 +172,9 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         if 'pref_type' in row_data:
             row_data['pref_type'] = ex['pref_type']
             row_data['human_label'] = ex['human_label']
-        if weights_dict:
-            row_data['weight'] = weights_dict[row_data['human_label']]
+            print(weights_dict)
+            print(row_data['human_label'])
+            row_data['weight'] = weights_dict[int(row_data['human_label'])]
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
