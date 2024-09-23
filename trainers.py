@@ -205,9 +205,9 @@ class BasicTrainer(object):
         self.eval_iterator = []
         self.eval_batches = []
         if 'imdb' in data_iterator_kwargs['names'][0]:
-            data_iterator_kwargs_positive = deepcopy(data_iterator_kwargs)
-            data_iterator_kwargs_positive['names'] = ['imdb_correctness']
-            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_positive, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
+            data_iterator_kwargs_correct = deepcopy(data_iterator_kwargs)
+            data_iterator_kwargs_correct['names'] = ['imdb_correctness']
+            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_correct, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             data_iterator_kwargs_short = deepcopy(data_iterator_kwargs)
             data_iterator_kwargs_short['names'] = ['imdb_length']
@@ -219,7 +219,7 @@ class BasicTrainer(object):
         else:
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
             self.eval_batches.append(list(self.eval_iterator[0]))
-            rank0_print(f'Loaded {len(self.eval_batches[0])} eval batches of size {config.eval_batch_size} for positive preference')
+            rank0_print(f'Loaded {len(self.eval_batches[0])} eval batches of size {config.eval_batch_size} for correctness preference')
             self.eval_data_names = None
         ###
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
@@ -276,7 +276,7 @@ class BasicTrainer(object):
         if imdb_pref is None:
             train_test = 'train' if train else 'eval'
         else:
-            train_test = 'train' if train else ('eval_positive' if imdb_pref == 'imdb_correctness' else 'eval_length')
+            train_test = 'train' if train else ('eval_correct' if imdb_pref == 'imdb_correctness' else 'eval_length')
 
         if loss_config.name in {'dpo', 'ipo'}:
             policy_chosen_logps, policy_rejected_logps = self.concatenated_forward(self.policy, batch)
