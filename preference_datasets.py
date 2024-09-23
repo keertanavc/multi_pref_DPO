@@ -169,6 +169,7 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['prompt'] = ex['prompt']
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
+        print('row_data.keys()')
         print(row_data.keys())
         print(row_data.keys())
         if 'pref_type' in row_data:
@@ -183,6 +184,8 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
 
     data = defaultdict(lambda: defaultdict(list))
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
+        print('row is')
+        print(row)
         row_data = split_prompt_and_responses(row)
         prompt = row_data['prompt']
         chosen = row_data['chosen_response']
