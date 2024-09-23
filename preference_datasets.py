@@ -425,6 +425,9 @@ def get_batch_iterator(names: List[str],
                         break
                     if include_weight:
                         indx = int(min(p[0], p[1])/2)
+                        print(p)
+                        print(weight)
+                        print(human_label)
                         batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
                     else:
                         batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
