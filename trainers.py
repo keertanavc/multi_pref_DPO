@@ -196,6 +196,13 @@ class BasicTrainer(object):
         else:
             self.dynamic_params['new_value'] = 0
         print('reference passing checks!')
+        print('reference passing checks!')
+        print('reference passing checks!')
+        print('reference passing checks!')
+
+        print(self.dynamic_params['new_value'], self.rank)
+        print(self.dynamic_params['new_value'], self.rank)
+        print(self.dynamic_params['new_value'], self.rank)
         print(self.dynamic_params['new_value'], self.rank)
 
         data_iterator_kwargs = dict(
