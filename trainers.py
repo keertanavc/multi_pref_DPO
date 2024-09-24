@@ -191,7 +191,6 @@ class BasicTrainer(object):
         if self.rank == 0 and self.config.wandb.enabled:
             self.start_wandb()
 
-        self.dynamic_params['new_value'] = 0
 
         if self.rank == 2:
             self.dynamic_params['new_value'] = 1
