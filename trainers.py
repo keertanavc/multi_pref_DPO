@@ -191,6 +191,13 @@ class BasicTrainer(object):
         if self.rank == 0 and self.config.wandb.enabled:
             self.start_wandb()
 
+        if self.rank == 0:
+            self.dynamic_params['new_value'] = 1
+        else:
+            self.dynamic_params['new_value'] = 0
+        print('reference passing checks!')
+        print(self.dynamic_params['new_value'], self.rank)
+
         data_iterator_kwargs = dict(
             names=config.datasets,
             tokenizer=self.tokenizer,
@@ -435,7 +442,7 @@ class BasicTrainer(object):
                         else:
                             output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
                             rank0_print(f'creating checkpoint to write to {output_dir}...')
-                            self.save(output_dir, mean_eval_metrics)
+                            # self.save(output_dir, mean_eval_metrics)
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####
@@ -499,7 +506,7 @@ class BasicTrainer(object):
         ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
         # self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-        numerator =  torch.zeros(self.num_groups, self.num_users).to(self.rank)
+        local_numerator =  torch.zeros(self.num_groups, self.num_users).to(self.rank)
         for batch in self.posterior_iterator:
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
@@ -510,14 +517,15 @@ class BasicTrainer(object):
                     label = local_batch['human_label'][i].to(self.rank)
                     losses = losses.to(self.rank)
                     # self.log_numerator_gamma[self.group, label-1] += losses[i] ## update this depending on user labels
-                    numerator[self.group, label-1] += losses[i]
+                    local_numerator[self.group, label-1] += losses[i]
         print(numerator, self.rank)
-        gathered_numerator =  torch.zeros(self.num_groups, self.num_users)
-        dist.reduce(numerator, gathered_numerator, op=dist.ReduceOp.SUM, dst=0)
-        if self.rank == 0:
-            self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-            self.log_numerator_gamma[self.group, :] += gathered_numerator
-            print(gathered_numerator)
+        # gathered_numerator =  torch.zeros(self.num_groups, self.num_users)
+        # dist.reduce(numerator, gathered_numerator, op=dist.ReduceOp.SUM, dst=0)
+        dist.all_reduce(local_numerator, op=dist.ReduceOp.SUM)
+        self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
+        self.log_numerator_gamma[self.group, :] += local_numerator
+        print('value and rank')
+        print(local_numerator, self.rank)
 
     def update_eta_gamma(self):
         '''Update gamma and eta after the end of EM steps'''
