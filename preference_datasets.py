@@ -173,7 +173,7 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         if split == 'train':
             row_data['human_label'] = ex['human_label']
             row_data['weight'] = weights_dict[int(ex['human_label'])]
-        elif split == 'text':
+        elif split == 'test':
             row_data['human_label'] = -10
             row_data['weight'] = 1
 
