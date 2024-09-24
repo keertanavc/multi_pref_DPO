@@ -170,8 +170,12 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
         row_data['pref_type'] = ex['pref_type']
-        row_data['human_label'] = ex['human_label']
-        row_data['weight'] = weights_dict[int(ex['human_label'])]
+        if split == 'train':
+            row_data['human_label'] = ex['human_label']
+            row_data['weight'] = weights_dict[int(ex['human_label'])]
+        elif split == 'text':
+            row_data['human_label'] = -10
+            row_data['weight'] = 1
 
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
