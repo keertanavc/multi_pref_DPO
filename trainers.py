@@ -190,6 +190,7 @@ class BasicTrainer(object):
             self.dynamic_params = None
         if self.rank == 0 and self.config.wandb.enabled:
             self.start_wandb()
+
         data_iterator_kwargs = dict(
             names=config.datasets,
             tokenizer=self.tokenizer,
@@ -234,6 +235,7 @@ class BasicTrainer(object):
 
     def start_wandb(self):
         ''' Initiate wandb logging '''
+        print('initiate wandb log')
         os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
         wandb.init(
             entity=self.config.wandb.entity,
@@ -245,6 +247,7 @@ class BasicTrainer(object):
 
     def end_wandb(self):
         ''' Terminate wandb logging '''
+        print('terminate wandb log')
         wandb.finish()
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
@@ -485,18 +488,18 @@ class BasicTrainer(object):
                 self.save()
 
             # update etas and gammas at the end of one EM step
-            if self.group == self.num_groups - 1:
+            if self.group == self.num_groups - 1 and self.rank == 0:
                 self.dynamic_params['mstep_completed'] = True
                 print('m step completed for iteration', self.dynamic_params['em_iteration'])
                 # inititate E step once M step is completed
                 self.update_eta_gamma()
-
-        self.end_wandb()
+                self.end_wandb()
 
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
-        self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
+        # self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
+        numerator =  torch.zeros(self.num_groups, self.num_users)
         for batch in self.posterior_iterator:
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
@@ -504,16 +507,21 @@ class BasicTrainer(object):
                 # then add the log of that to the log_numerator_gamma to the corresponding user
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
                 for i in range(len(losses)):
-                    label = local_batch['human_label'][i]
-                    label = label.to(self.log_numerator_gamma.device)
-                    losses = losses.to(self.log_numerator_gamma.device)
-                    self.log_numerator_gamma[self.group, label-1] += losses[i] ## update this depending on user labels
+                    label = local_batch['human_label'][i].to(self.rank)
+                    losses = losses.to(self.rank)
+                    # self.log_numerator_gamma[self.group, label-1] += losses[i] ## update this depending on user labels
+                    numerator[self.group, label-1] += losses[i]
+        print(numerator, self.rank)
+        gathered_numerator =  torch.zeros(self.num_groups, self.num_users)
+        dist.reduce(numerator, gathered_numerator, op=dist.ReduceOp.SUM, dst=0)
+        if self.rank == 0:
+            self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
+            self.log_numerator_gamma[self.group, :] += gathered_numerator
 
     def update_eta_gamma(self):
         '''Update gamma and eta after the end of EM steps'''
         self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
         self.eta = torch.mean(self.gamma, dim=1)
-
         print('updated etas, new etas are')
         print(self.eta)
         print('updated gammes, new gammas are')
@@ -521,7 +529,8 @@ class BasicTrainer(object):
         em_metrics = {}
         for i in range(self.num_groups):
             em_metrics[i] = self.eta[i]
-        wandb.log(em_metrics, step=self.example_counter)
+        if self.config.wandb.enabled and self.rank == 0:
+            wandb.log(em_metrics, step=self.group)
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
