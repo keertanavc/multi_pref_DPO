@@ -499,7 +499,7 @@ class BasicTrainer(object):
         ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
         # self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-        numerator =  torch.zeros(self.num_groups, self.num_users)
+        numerator =  torch.zeros(self.num_groups, self.num_users).to(self.rank)
         for batch in self.posterior_iterator:
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
@@ -517,6 +517,7 @@ class BasicTrainer(object):
         if self.rank == 0:
             self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
             self.log_numerator_gamma[self.group, :] += gathered_numerator
+            print(gathered_numerator)
 
     def update_eta_gamma(self):
         '''Update gamma and eta after the end of EM steps'''
