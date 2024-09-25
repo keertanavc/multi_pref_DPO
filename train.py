@@ -3,7 +3,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
 import transformers
 # from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
-from utils import get_local_dir, disable_dropout, init_distributed, get_open_port
+from utils import get_local_dir, disable_dropout, init_distributed, get_open_port, update_eta_gamma
 import os
 import hydra
 import torch.multiprocessing as mp
@@ -42,9 +42,19 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     print(f'Creating trainer on process {rank} with world size {world_size}')
     trainer = TrainerClass(policy, config, config.seed, config.local_run_dir, reference_model=reference_model, rank=rank, world_size=world_size, dynamic_params=dynamic_params)
     trainer.train()
-    if rank == 0 and dynamic_params['group'] == config.num_groups - 1:
-        dynamic_params['etas'], dynamic_params['gammas'] = trainer.update_eta_gamma()
-    # trainer.save()
+
+    # update gammas and etas at the end of a single EM-iteration
+    if rank == 0:
+        dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior()
+        if dynamic_params['group'] == config.num_groups - 1
+            dynamic_params['gamma'], dynamic_params['eta'] = update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
+            if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
+                wandb.finish()
+
+    # save models at the end of the EM algorithm
+    if dynamic_params['em_iteration'] == dynamic_params['TOTAL_ITERATIONS']:
+        if if trainer.group == trainer.num_groups - 1
+            trainer.save()
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
 def train_weighted_dpo(config: DictConfig, dynamic_params: Dict = None):
