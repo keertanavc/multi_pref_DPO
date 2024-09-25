@@ -10,6 +10,8 @@ import importlib.util
 import socket
 import os
 from typing import Dict, Union, Type, List
+import torch.nn.functional as F
+import wandb
 
 
 def get_open_port():
@@ -151,6 +153,23 @@ def init_distributed(rank: int, world_size: int, master_addr: str = 'localhost',
     os.environ["MASTER_PORT"] = str(port)
     dist.init_process_group(backend, rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
+
+def update_eta_gamma(log_numerator_gamma, em_step):
+    '''Update gamma and eta after the end of EM steps'''
+    gamma = F.softmax(log_numerator_gamma, dim=0)
+    eta = torch.mean(gamma, dim=1)
+
+    print('updated gammas, new gammas are')
+    print(gamma)
+    print('updated etas, new etas are')
+    print(eta)
+
+    em_metrics = {}
+    for i in range(len(eta)):
+        em_metrics['group ' + str(i)] = eta[i]
+        wandb.log(em_metrics, step=em_step)
+
+    return gamma, eta
 
 
 class TemporarilySeededRandom:
