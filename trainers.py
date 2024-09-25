@@ -512,7 +512,7 @@ class BasicTrainer(object):
         total_numerator = torch.sum(total_numerator, dim=0)
         print('global value', self.rank)
         print(total_numerator, self.rank)
-        assert total_numerator.shape = local_numerator.shape
+        assert total_numerator.shape == local_numerator.shape
 
         self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
         self.log_numerator_gamma[self.group, :] += local_numerator
