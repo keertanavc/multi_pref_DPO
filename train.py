@@ -42,7 +42,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     print(f'Creating trainer on process {rank} with world size {world_size}')
     trainer = TrainerClass(policy, config, config.seed, config.local_run_dir, reference_model=reference_model, rank=rank, world_size=world_size, dynamic_params=dynamic_params)
     trainer.train()
-    if rank == 0:
+    if rank == 0 and dynamic_params['group'] == config.num_groups - 1:
         dynamic_params['etas'], dynamic_params['gammas'] = trainer.update_eta_gamma()
     # trainer.save()
 
