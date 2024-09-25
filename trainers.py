@@ -508,7 +508,7 @@ class BasicTrainer(object):
                     local_numerator[self.group, label-1] += losses[i]
         print('local value', self.rank)
         print(local_numerator, self.rank)
-        local_numerator = torch.flatten(local_numerator)
+        local_numerator = local_numerator.reshape(1, self.num_groups * self.num_users)
         print('local flattened value', self.rank)
         print(local_numerator, self.rank)
         total_numerator = all_gather_if_needed(local_numerator, self.rank, self.world_size)
