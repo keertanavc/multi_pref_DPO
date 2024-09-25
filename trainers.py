@@ -505,7 +505,7 @@ class BasicTrainer(object):
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i].to(self.rank)
                     losses = losses.to(self.rank)
-                    local_numerator[self.group, label-1] += losses[i]
+                    local_numerator[self.group, label] += losses[i]
         print('local value', self.rank)
         print(local_numerator, self.rank)
         local_numerator = local_numerator.reshape(1, self.num_groups * self.num_users)
@@ -514,6 +514,7 @@ class BasicTrainer(object):
         total_numerator = all_gather_if_needed(local_numerator, self.rank, self.world_size)
         print('global value')
         print(total_numerator)
+        total_numerator = torch.sum(total_numerator, axis = 0)
         total_numerator = total_numerator.view(self.num_groups, self.num_users)
         print('global unflattened value', self.rank)
         print(total_numerator, self.rank)
@@ -522,7 +523,7 @@ class BasicTrainer(object):
         # assert total_numerator.shape == local_numerator.shape
 
         self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-        self.log_numerator_gamma[self.group, :] += local_numerator
+        self.log_numerator_gamma += total_numerator
         print('value and rank')
         print(local_numerator, self.rank)
 
