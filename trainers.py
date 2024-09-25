@@ -182,7 +182,6 @@ class BasicTrainer(object):
             for i in range(config.num_users):
                 self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
             self.gamma = self.dynamic_params['gamma'].to(self.rank)
-            self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma'].to(self.rank)
             self.eta = self.dynamic_params['eta'].to(self.rank)
         else:
             self.dynamic_params = None
@@ -242,11 +241,6 @@ class BasicTrainer(object):
             dir=get_local_dir(self.config.local_dirs),
             name=self.config.exp_name + '_group' + str(self.group) + '_emstep' + str(self.dynamic_params['em_iteration']),
         )
-
-    def end_wandb(self):
-        ''' Terminate wandb logging '''
-        print('terminate wandb log')
-        wandb.finish()
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
@@ -478,14 +472,6 @@ class BasicTrainer(object):
             #### END TRAINING ####
 
         if self.dynamic_params:
-            # compute values needed for the E-step
-            self.compute_posterior()
-
-            # save models at the end of the EM algorithm
-            if self.dynamic_params['em_iteration']  == self.dynamic_params['TOTAL_ITERATIONS']:
-                self.save()
-
-            # update etas and gammas at the end of one EM step
             if self.group == self.num_groups - 1 and self.rank == 0:
                 print('m step completed for iteration', self.dynamic_params['em_iteration'])
                     # return self.update_eta_gamma()
@@ -494,54 +480,21 @@ class BasicTrainer(object):
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
-        # self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-        local_numerator =  torch.zeros(self.num_groups, self.num_users).to(self.rank)
+        local_value =  torch.zeros(1, self.num_users).to(self.rank)
         for batch in self.posterior_iterator:
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
-                # reuse the loss function to compute the loss
-                # then add the log of that to the log_numerator_gamma to the corresponding user
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i].to(self.rank)
                     losses = losses.to(self.rank)
-                    local_numerator[self.group, label] += losses[i]
-        print('local value', self.rank)
-        print(local_numerator, self.rank)
-        local_numerator = local_numerator.reshape(1, self.num_groups * self.num_users)
-        print('local flattened value', self.rank)
-        print(local_numerator, self.rank)
-        total_numerator = all_gather_if_needed(local_numerator, self.rank, self.world_size)
-        print('global value')
-        print(total_numerator)
-        total_numerator = torch.sum(total_numerator, axis = 0)
-        total_numerator = total_numerator.view(self.num_groups, self.num_users)
-        print('global unflattened value', self.rank)
-        print(total_numerator, self.rank)
-        print('global value shape')
-        print(total_numerator.shape, self.rank)
-        # assert total_numerator.shape == local_numerator.shape
-
-        self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-        self.log_numerator_gamma += total_numerator
-        print('final value and rank')
-        print(self.log_numerator_gamma, self.rank)
-
-    def update_eta_gamma(self):
-        '''Update gamma and eta after the end of EM steps'''
-        self.gamma = F.softmax(self.log_numerator_gamma, dim=0)
-        self.eta = torch.mean(self.gamma, dim=1)
-        print('updated gammas, new gammas are')
-        print(self.gamma)
-        print('updated etas, new etas are')
-        print(self.eta)
-        em_metrics = {}
-        for i in range(self.num_groups):
-            em_metrics['group ' + str(i)] = self.eta[i]
-        if self.config.wandb.enabled and self.rank == 0:
-            wandb.log(em_metrics, step=self.group)
-        self.end_wandb()
-        return self.gamma, self.eta
+                    local_value[0, label] += losses[i]
+        print('local: ', local_value, self.rank)
+        global_value = all_gather_if_needed(local_value, self.rank, self.world_size)
+        print('global w/o agg: ', global_value, self.rank)
+        global_value = torch.sum(global_value, axis = 0)
+        print('global w. agg: ', global_value, self.rank)
+        return torch.log(torch.tensor(self.eta[self.group])) + global_value
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
