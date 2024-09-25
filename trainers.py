@@ -181,9 +181,9 @@ class BasicTrainer(object):
             self.group = self.dynamic_params['group']
             for i in range(config.num_users):
                 self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
-            self.gamma = self.dynamic_params['gamma']
-            self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma']
-            self.eta = self.dynamic_params['eta']
+            self.gamma = self.dynamic_params['gamma'].to(self.rank)
+            self.log_numerator_gamma = self.dynamic_params['log_numerator_gamma'].to(self.rank)
+            self.eta = self.dynamic_params['eta'].to(self.rank)
         else:
             self.dynamic_params = None
         if self.rank == 0 and self.config.wandb.enabled:
@@ -523,14 +523,9 @@ class BasicTrainer(object):
         # assert total_numerator.shape == local_numerator.shape
 
         self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
-        print('self.log_numerator_gamma.device')
-        print(self.log_numerator_gamma.device)
-        print('total_numerator.device')
-        print(total_numerator.device)
-        print('numerator device')
         self.log_numerator_gamma += total_numerator
-        print('value and rank')
-        print(local_numerator, self.rank)
+        print('final value and rank')
+        print(self.log_numerator_gamma, self.rank)
 
     def update_eta_gamma(self):
         '''Update gamma and eta after the end of EM steps'''
