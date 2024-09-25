@@ -179,8 +179,6 @@ class BasicTrainer(object):
             self.num_users = config.num_users
             self.num_groups = config.num_groups
             self.group = self.dynamic_params['group']
-            if self.group == 0:
-                self.dynamic_params['mstep_completed'] = False
             for i in range(config.num_users):
                 self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
             self.gamma = self.dynamic_params['gamma']
@@ -190,20 +188,6 @@ class BasicTrainer(object):
             self.dynamic_params = None
         if self.rank == 0 and self.config.wandb.enabled:
             self.start_wandb()
-
-
-        if self.rank == 2:
-            self.dynamic_params['new_value'] = 1
-
-        print('reference passing checks!')
-        print('reference passing checks!')
-        print('reference passing checks!')
-        print('reference passing checks!')
-
-        print(self.dynamic_params['new_value'], self.rank)
-        print(self.dynamic_params['new_value'], self.rank)
-        print(self.dynamic_params['new_value'], self.rank)
-        print(self.dynamic_params['new_value'], self.rank)
 
         data_iterator_kwargs = dict(
             names=config.datasets,
@@ -498,16 +482,14 @@ class BasicTrainer(object):
             self.compute_posterior()
 
             # save models at the end of the EM algorithm
-            if self.dynamic_params['em_iteration'] == self.dynamic_params['TOTAL_ITERATIONS']:
+            if self.dynamic_params['em_iteration']  == self.dynamic_params['TOTAL_ITERATIONS']:
                 self.save()
 
             # update etas and gammas at the end of one EM step
             if self.group == self.num_groups - 1 and self.rank == 0:
-                self.dynamic_params['mstep_completed'] = True
                 print('m step completed for iteration', self.dynamic_params['em_iteration'])
-                # inititate E step once M step is completed
-                self.update_eta_gamma()
-                self.end_wandb()
+                    # return self.update_eta_gamma()
+
 
     def compute_posterior(self):
         ''' Computing values required from current group's policy for the E-step'''
@@ -523,12 +505,15 @@ class BasicTrainer(object):
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i].to(self.rank)
                     losses = losses.to(self.rank)
-                    # self.log_numerator_gamma[self.group, label-1] += losses[i] ## update this depending on user labels
                     local_numerator[self.group, label-1] += losses[i]
-        print(numerator, self.rank)
-        # gathered_numerator =  torch.zeros(self.num_groups, self.num_users)
-        # dist.reduce(numerator, gathered_numerator, op=dist.ReduceOp.SUM, dst=0)
-        dist.all_reduce(local_numerator, op=dist.ReduceOp.SUM)
+        print('local value', self.rank)
+        print(local_numerator, self.rank)
+        total_numerator = all_gather_if_needed(local_numerator, self.rank, self.world_size)
+        total_numerator = torch.sum(total_numerator, dim=0))
+        print('global value', self.rank)
+        print(total_numerator, self.rank)
+        assert total_numerator.shape = local_numerator.shape
+
         self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
         self.log_numerator_gamma[self.group, :] += local_numerator
         print('value and rank')
@@ -547,6 +532,8 @@ class BasicTrainer(object):
             em_metrics[i] = self.eta[i]
         if self.config.wandb.enabled and self.rank == 0:
             wandb.log(em_metrics, step=self.group)
+        self.end_wandb()
+        return self.gamma, self.eta
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
