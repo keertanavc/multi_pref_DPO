@@ -537,7 +537,7 @@ class BasicTrainer(object):
         print(self.gamma)
         em_metrics = {}
         for i in range(self.num_groups):
-            em_metrics[i] = self.eta[i]
+            em_metrics['group ' + str(i)] = self.eta[i]
         if self.config.wandb.enabled and self.rank == 0:
             wandb.log(em_metrics, step=self.group)
         self.end_wandb()
