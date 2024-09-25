@@ -46,7 +46,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     # update gammas and etas at the end of a single EM-iteration
     if rank == 0:
         dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior()
-        if dynamic_params['group'] == config.num_groups - 1
+        if dynamic_params['group'] == config.num_groups - 1:
             dynamic_params['gamma'], dynamic_params['eta'] = update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
             if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
                 wandb.finish()
