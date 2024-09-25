@@ -523,6 +523,11 @@ class BasicTrainer(object):
         # assert total_numerator.shape == local_numerator.shape
 
         self.log_numerator_gamma[self.group, :] = torch.log(torch.tensor(self.eta[self.group]))
+        print('self.log_numerator_gamma.device')
+        print(self.log_numerator_gamma.device)
+        print('total_numerator.device')
+        print(total_numerator.device)
+        print('numerator device')
         self.log_numerator_gamma += total_numerator
         print('value and rank')
         print(local_numerator, self.rank)
