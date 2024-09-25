@@ -20,24 +20,27 @@ import torch
 # def compute_posterior(policies):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(config: DictConfig):
-    # dict to pass around values by reference
     dynamic_params = {}
-    dynamic_params['new_value'] = 0
     # initially all users are equally likely to be from any subgroup
     dynamic_params['gamma'] = torch.ones(config.num_groups, config.num_users) * (1 / config.num_groups)
     dynamic_params['eta'] = torch.ones(config.num_groups) * (1 / config.num_groups)
-    # intermediate calculations for the E step
-    dynamic_params['log_numerator_gamma'] = torch.zeros(config.num_groups, config.num_users)
-    # current iteration of the EM algorithm
-    dynamic_params['em_iteration'] = 0
-    # check if current mstep for the EM step is completed
-    dynamic_params['mstep_completed'] = False
-    # total number of iterations for the EM algorithm
+
+    # variables to keep track of EM step iterations
     dynamic_params['TOTAL_ITERATIONS'] = config.em_steps
+    dynamic_params['em_iteration'] = 0
+
     for iter in range(dynamic_params['TOTAL_ITERATIONS']):
         dynamic_params['em_iteration'] += 1
-        # train policy for each sub-group based on current weights
+
+        # intermediate calculations for the E step
+        dynamic_params['log_numerator_gamma'] = torch.zeros(config.num_groups, config.num_users)
+
         for group in range(config.num_groups):
+
+            print('current gammas and etas are:')
+            print(dynamic_params['gamma'])
+            print(dynamic_params['eta'])
+
             dynamic_params['group'] = group
             train_weighted_dpo(config, dynamic_params)
 
