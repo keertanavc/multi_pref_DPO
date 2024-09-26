@@ -45,6 +45,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     trainer.train()
 
     # update gammas and etas at the end of a single EM-iteration
+    print('updating gammas once all training is complete.')
     if rank == 0:
         dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior()
         if dynamic_params['group'] == config.num_groups - 1:
