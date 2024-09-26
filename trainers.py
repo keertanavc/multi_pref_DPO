@@ -373,7 +373,6 @@ class BasicTrainer(object):
                         eval_data_name = self.eval_data_names[i] ## NEW
                     else:
                         eval_data_name = None
-                    print('evaluating ', eval_data_name)
                     all_eval_metrics = defaultdict(list)
                     if self.config.sample_during_eval:
                         all_policy_samples, all_reference_samples = [], []
@@ -382,16 +381,13 @@ class BasicTrainer(object):
                             reference_text_table = wandb.Table(columns=["step", "prompt", "sample"])
 
                     #for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
-                    print('looping through eval batches now...')
                     for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
-                        print('ping!')
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
                             _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
 
                         for k, v in eval_metrics.items():
                             all_eval_metrics[k].extend(v)
-                    print('done evals')
 
                     # if self.config.sample_during_eval:
                     #     if self.config.n_eval_model_samples < self.config.eval_batch_size:
@@ -421,7 +417,6 @@ class BasicTrainer(object):
                         rank0_print(json.dumps(all_policy_samples[:10], indent=2))
                         if self.config.loss.name in {'dpo', 'ipo'}:
                             rank0_print(json.dumps(all_reference_samples[:10], indent=2))
-                    print('done evals after 1')
 
                     if self.config.wandb.enabled and self.rank == 0:
                         wandb.log(mean_eval_metrics, step=self.example_counter)
@@ -430,7 +425,6 @@ class BasicTrainer(object):
                             wandb.log({"policy_samples": policy_text_table}, step=self.example_counter)
                             if self.config.loss.name in {'dpo', 'ipo'}:
                                 wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
-                    print('done evals after 2')
 
                     if self.example_counter > 0:
                         if self.config.debug:
@@ -438,11 +432,11 @@ class BasicTrainer(object):
                         else:
                             output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
                             rank0_print(f'creating checkpoint to write to {output_dir}...')
-                    print('done evals after 3')
-                            # self.save(output_dir, mean_eval_metrics)
+                            self.save(output_dir, mean_eval_metrics)
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####
+            print('entered training')
             self.policy.train()
 
             start_time = time.time()
@@ -455,11 +449,12 @@ class BasicTrainer(object):
 
                 for k, v in metrics.items():
                     batch_metrics[k].extend(v)
-
+            print('training starts')
             grad_norm = self.clip_gradient()
             self.optimizer.step()
             self.scheduler.step()
             self.optimizer.zero_grad()
+            print('training ends')
 
             step_time = time.time() - start_time
             examples_per_second = self.config.batch_size / step_time
@@ -485,7 +480,7 @@ class BasicTrainer(object):
 
         if self.dynamic_params:
             if self.group == self.num_groups - 1 and self.rank == 0:
-                print('m step completed for iteration', self.dynamic_params['em_iteration'])
+                rank0_print('m step completed for iteration', self.dynamic_params['em_iteration'])
                     # return self.update_eta_gamma()
 
 
