@@ -158,7 +158,6 @@ def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str,
 
     return data
 
-###
 def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
@@ -215,10 +214,8 @@ def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = No
         data = get_hh(split, silent=silent, cache_dir=cache_dir)
     elif name == 'se':
         data = get_se(split, silent=silent, cache_dir=cache_dir)
-    ###
     elif 'imdb' in name:
         data = get_imdb(split, name, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict)
-    ###
     else:
         raise ValueError(f"Unknown dataset '{name}'")
     # assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
@@ -320,8 +317,8 @@ def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_m
     batch['rejected'] = prompt + rejected
     batch['chosen_response_only'] = chosen
     batch['rejected_response_only'] = rejected
-    batch['weight'] = weight ###
-    batch['human_label'] = human_label ###
+    batch['weight'] = weight
+    batch['human_label'] = human_label
 
     for k, toks in {'chosen': chosen_sequence_tokens, 'rejected': rejected_sequence_tokens, 'prompt': prompt_tokens}.items():
         for type_key, tokens in toks.items():
@@ -371,20 +368,12 @@ def get_batch_iterator(names: List[str],
     with TemporarilySeededRandom(seed):
         permutation_seeds = iter(np.random.randint(0, 2**32, size=1000000))
         flat_data = []
-        include_weight = False
         for name in names:
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
-            # if weights_dict:
             for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
                 assert (len(data['weight']) == len(data['pairs'])) and (len(data['human_label']) == len(data['pairs']))
                 flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
-                # include_weight = True
-            # else:
-            #     for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
-            #         flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode))
-    print('dataloading worked!!')
     collate_fn = get_collate_fn(tokenizer)
-    print()
 
     epoch_idx = 0
     example_idx = 0
@@ -399,16 +388,14 @@ def get_batch_iterator(names: List[str],
                 random.shuffle(flat_data)
 
         batch = []
-        #for prompt, responses, pairs, sft_target, truncation_mode in flat_data:
-        for row in flat_data: ###
+        for row in flat_data:
             prompt = row[0]
             responses = row[1]
             pairs = row[2]
             sft_target = row[3]
             truncation_mode = row[4]
-            # if include_weight:
-            weight = torch.tensor(row[5])#[torch.tensor(i) for i in row[5]]
-            human_label = torch.tensor(row[6])#[torch.tensor(i) for i in row[6]]
+            weight = torch.tensor(row[5])
+            human_label = torch.tensor(row[6])
             if done:
                 break
             if sft_mode:
@@ -427,11 +414,8 @@ def get_batch_iterator(names: List[str],
                 for p in pairs:
                     if done:
                         break
-                    # if include_weight:
                     indx = int(min(p[0], p[1])/2)
                     batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
-                    # else:
-                    #     batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length)
                     batch.append(batch_element)
                     example_idx += 1
                     if len(batch) == batch_size:
