@@ -53,8 +53,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
     # save models at the end of the EM algorithm
     if dynamic_params['em_iteration'] == dynamic_params['TOTAL_ITERATIONS']:
-        if trainer.group == trainer.num_groups - 1:
-            trainer.save()
+        trainer.save()
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
 def train_weighted_dpo(config: DictConfig, dynamic_params: Dict = None):
