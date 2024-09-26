@@ -22,6 +22,7 @@ from typing import Optional, Dict, List, Union, Tuple
 def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Module, reference_model: Optional[nn.Module] = None, dynamic_params:Dict = None):
     """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
     if 'FSDP' in config.trainer:
+        print('made it till init distributed')
         init_distributed(rank, world_size, port=config.fsdp_port)
 
     if config.debug:
