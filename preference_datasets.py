@@ -49,7 +49,7 @@ def get_se(split, silent=False, cache_dir: str = None) -> Dict[str, Dict[str, Un
        We strip the HTML tags from the responses (except for <code> tags), and we add necessary newlines.
     """
     print(f'Loading SE dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences', cache_dir=cache_dir)['train']
+    dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences', cache_dir=cache_dir, chunksize=5 << 20)['train']
     print('done')
 
     # shuffle the dataset and select 1% for test
@@ -204,9 +204,6 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         data[prompt]['pref_type'].append(pref_type)
         data[prompt]['human_label'].append(row_data['human_label'])
         data[prompt]['weight'].append(row_data['weight'])
-        assert len(data[prompt]['pairs']) == len(data[prompt]['pref_type'])
-        assert len(data[prompt]['pairs']) == len(data[prompt]['human_label'])
-        assert len(data[prompt]['pairs']) == len(data[prompt]['weight'])
     return data
 ###
 
@@ -409,8 +406,8 @@ def get_batch_iterator(names: List[str],
             sft_target = row[3]
             truncation_mode = row[4]
             # if include_weight:
-            weight = [torch.tensor(i) for i in row[5]]
-            human_label = [torch.tensor(i) for i in row[6]]
+            weight = torch.tensor(row[5])#[torch.tensor(i) for i in row[5]]
+            human_label = torch.tensor(row[6])#[torch.tensor(i) for i in row[6]]
             if done:
                 break
             if sft_mode:
