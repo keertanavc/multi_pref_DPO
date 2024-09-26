@@ -482,7 +482,7 @@ class BasicTrainer(object):
         ''' Computing values required from current group's policy for the E-step'''
         self.policy.eval()
         local_value =  torch.zeros(1, self.num_users).to(self.rank)
-        for batch in self.posterior_iterator:
+        for batch in self.posterior_batches:
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
