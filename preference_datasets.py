@@ -186,6 +186,13 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
     data = defaultdict(lambda: defaultdict(list))
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
         row_data = split_prompt_and_responses(row)
+        pref_type = row_data['pref_type']
+        if name == 'imdb_correctness':
+            if pref_type == 2:
+                continue
+        elif name == 'imdb_length':
+            if pref_type == 1:
+                continue
         prompt = row_data['prompt']
         chosen = row_data['chosen_response']
         rejected = row_data['rejected_response']
@@ -194,16 +201,9 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
-        pref_type = row_data['pref_type']
         data[prompt]['pref_type'].append(pref_type)
         data[prompt]['human_label'].append(row_data['human_label'])
         data[prompt]['weight'].append(row_data['weight'])
-        if name == 'imdb_correctness':
-            if pref_type == 1:
-                continue
-        if name == 'imdb_length':
-            if pref_type == 2:
-                continue
         assert len(data[prompt]['pairs']) == len(data[prompt]['pref_type'])
         assert len(data[prompt]['pairs']) == len(data[prompt]['human_label'])
         assert len(data[prompt]['pairs']) == len(data[prompt]['weight'])
