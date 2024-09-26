@@ -31,7 +31,10 @@ from utils import (
     get_block_class_from_model,
     rank0_print,
     get_local_dir,
-    get_local_run_dir
+    get_local_run_dir,
+    init_distributed,
+    disable_dropout,
+    get_open_port
 )
 # from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
 
@@ -377,6 +380,7 @@ class BasicTrainer(object):
                             reference_text_table = wandb.Table(columns=["step", "prompt", "sample"])
 
                     #for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
+                    print('looping through eval batches now...')
                     for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
