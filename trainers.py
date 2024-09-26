@@ -219,6 +219,8 @@ class BasicTrainer(object):
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_short, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
+            print('eval batch length:')
+            print(len(self.eval_batches))
             rank0_print(f'Loaded {len(self.eval_batches[0]) + len(self.eval_batches[1])} eval batches of size {config.eval_batch_size}')
             self.eval_data_names = ['imdb_correctness', 'imdb_length']
         else:
@@ -382,6 +384,7 @@ class BasicTrainer(object):
                     #for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
                     print('looping through eval batches now...')
                     for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
+                        print('ping!')
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
                             _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
