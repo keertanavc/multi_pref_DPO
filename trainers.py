@@ -388,7 +388,6 @@ class BasicTrainer(object):
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
                             _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
-                            print('got eval metrics')
 
                         for k, v in eval_metrics.items():
                             all_eval_metrics[k].extend(v)
@@ -422,6 +421,7 @@ class BasicTrainer(object):
                         rank0_print(json.dumps(all_policy_samples[:10], indent=2))
                         if self.config.loss.name in {'dpo', 'ipo'}:
                             rank0_print(json.dumps(all_reference_samples[:10], indent=2))
+                    print('done evals after 1')
 
                     if self.config.wandb.enabled and self.rank == 0:
                         wandb.log(mean_eval_metrics, step=self.example_counter)
@@ -430,6 +430,7 @@ class BasicTrainer(object):
                             wandb.log({"policy_samples": policy_text_table}, step=self.example_counter)
                             if self.config.loss.name in {'dpo', 'ipo'}:
                                 wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
+                    print('done evals after 2')
 
                     if self.example_counter > 0:
                         if self.config.debug:
@@ -437,6 +438,7 @@ class BasicTrainer(object):
                         else:
                             output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
                             rank0_print(f'creating checkpoint to write to {output_dir}...')
+                    print('done evals after 3')
                             # self.save(output_dir, mean_eval_metrics)
             #### END EVALUATION ####
 
