@@ -186,6 +186,7 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
     data = defaultdict(lambda: defaultdict(list))
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
         row_data = split_prompt_and_responses(row)
+        print(row_data)
         pref_type = row_data['pref_type']
         if name == 'imdb_correctness':
             if pref_type == 2:
