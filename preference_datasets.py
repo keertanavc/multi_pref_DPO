@@ -382,8 +382,9 @@ def get_batch_iterator(names: List[str],
             # else:
             #     for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir).items():
             #         flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode))
-
+    print('dataloading worked!!')
     collate_fn = get_collate_fn(tokenizer)
+    print()
 
     epoch_idx = 0
     example_idx = 0
