@@ -433,10 +433,10 @@ class BasicTrainer(object):
                             output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
                             rank0_print(f'creating checkpoint to write to {output_dir}...')
                             self.save(output_dir, mean_eval_metrics)
+            print('all done with evals')
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####
-            print('entered training')
             self.policy.train()
 
             start_time = time.time()
@@ -449,12 +449,12 @@ class BasicTrainer(object):
 
                 for k, v in metrics.items():
                     batch_metrics[k].extend(v)
-            print('training starts')
+
             grad_norm = self.clip_gradient()
             self.optimizer.step()
             self.scheduler.step()
             self.optimizer.zero_grad()
-            print('training ends')
+
 
             step_time = time.time() - start_time
             examples_per_second = self.config.batch_size / step_time
@@ -463,6 +463,7 @@ class BasicTrainer(object):
 
             self.batch_counter += 1
             self.example_counter += self.config.batch_size
+            print(self.example_counter)
 
             if last_log is None or time.time() - last_log > self.config.minimum_log_interval_secs:
                 mean_train_metrics = {k: sum(v) / len(v) for k, v in batch_metrics.items()}
@@ -476,6 +477,7 @@ class BasicTrainer(object):
                 last_log = time.time()
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
+            print('training ends for good')
             #### END TRAINING ####
 
         if self.dynamic_params:
