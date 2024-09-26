@@ -388,31 +388,33 @@ class BasicTrainer(object):
                         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
                         with torch.no_grad():
                             _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
+                            print('got eval metrics')
 
                         for k, v in eval_metrics.items():
                             all_eval_metrics[k].extend(v)
+                    print('done evals')
 
-                    if self.config.sample_during_eval:
-                        if self.config.n_eval_model_samples < self.config.eval_batch_size:
-                            rank0_print(f'Warning: n_eval_model_samples ({self.config.n_eval_model_samples}) < eval_batch_size ({self.config.eval_batch_size}). Sampling from the first complete eval batch of prompts.')
-                            #sample_batches = self.eval_batches[:1]
-                            sample_batches = use_eval_batches[:1]
-                        else:
-                            n_sample_batches = self.config.n_eval_model_samples // self.config.eval_batch_size
-                            # sample_batches = self.eval_batches[:n_sample_batches]
-                            sample_batches = use_eval_batches[:n_sample_batches]
-                        for eval_batch in (tqdm.tqdm(sample_batches, desc='Generating samples...') if self.rank == 0 else sample_batches):
-                            local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
-                            policy_samples, reference_samples = self.get_batch_samples(local_eval_batch)
-
-                            all_policy_samples.extend(policy_samples)
-                            all_reference_samples.extend(reference_samples)
-
-                            for prompt, sample in zip(eval_batch['prompt'], policy_samples):
-                                policy_text_table.add_data(self.example_counter, prompt, sample)
-                            if self.config.loss.name in {'dpo', 'ipo'}:
-                                for prompt, sample in zip(eval_batch['prompt'], reference_samples):
-                                    reference_text_table.add_data(self.example_counter, prompt, sample)
+                    # if self.config.sample_during_eval:
+                    #     if self.config.n_eval_model_samples < self.config.eval_batch_size:
+                    #         rank0_print(f'Warning: n_eval_model_samples ({self.config.n_eval_model_samples}) < eval_batch_size ({self.config.eval_batch_size}). Sampling from the first complete eval batch of prompts.')
+                    #         #sample_batches = self.eval_batches[:1]
+                    #         sample_batches = use_eval_batches[:1]
+                    #     else:
+                    #         n_sample_batches = self.config.n_eval_model_samples // self.config.eval_batch_size
+                    #         # sample_batches = self.eval_batches[:n_sample_batches]
+                    #         sample_batches = use_eval_batches[:n_sample_batches]
+                    #     for eval_batch in (tqdm.tqdm(sample_batches, desc='Generating samples...') if self.rank == 0 else sample_batches):
+                    #         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
+                    #         policy_samples, reference_samples = self.get_batch_samples(local_eval_batch)
+                    #
+                    #         all_policy_samples.extend(policy_samples)
+                    #         all_reference_samples.extend(reference_samples)
+                    #
+                    #         for prompt, sample in zip(eval_batch['prompt'], policy_samples):
+                    #             policy_text_table.add_data(self.example_counter, prompt, sample)
+                    #         if self.config.loss.name in {'dpo', 'ipo'}:
+                    #             for prompt, sample in zip(eval_batch['prompt'], reference_samples):
+                    #                 reference_text_table.add_data(self.example_counter, prompt, sample)
 
                     mean_eval_metrics = {k: sum(v) / len(v) for k, v in all_eval_metrics.items()}
                     rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
