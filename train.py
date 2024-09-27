@@ -3,7 +3,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
 import transformers
 # from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
-from utils import get_local_dir, disable_dropout, init_distributed, get_open_port, update_eta_gamma
+from utils import get_local_dir, disable_dropout, init_distributed, get_open_port, update_eta_gamma, log_eta
 import os
 import hydra
 import torch.multiprocessing as mp
@@ -36,20 +36,18 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
             project=config.wandb.project,
             config=OmegaConf.to_container(config),
             dir=get_local_dir(config.local_dirs),
-            # name=config.exp_name,
             name = config.exp_name + '_group=' + str(dynamic_params['group']) + '_emstep=' + str(dynamic_params['em_iteration']),
         )
+        log_eta(dynamic_params['eta'], dynamic_params['em_iteration'])
 
     TrainerClass = getattr(trainers, config.trainer)
     print(f'Creating trainer on process {rank} with world size {world_size}')
     trainer = TrainerClass(policy, config, config.seed, config.local_run_dir, reference_model=reference_model, rank=rank, world_size=world_size, dynamic_params=dynamic_params)
     trainer.train()
 
-    # update gammas and etas at the end of a single EM-iteration
-    # print('dynamic params device:', dynamic_params['log_numerator_gamma'].device)
-    print(f'updating gammas for group', dynamic_params['group'])
     dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior().to('cpu')
-    print(dynamic_params['log_numerator_gamma'], dynamic_params['group'])
+    print(f'updating gammas for group', dynamic_params['group'])
+    print('gammas:', dynamic_params['log_numerator_gamma'])
 
     if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
         trainer.save()
