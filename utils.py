@@ -28,8 +28,9 @@ def update_eta_gamma(log_numerator_gamma, em_step):
 def log_eta(eta, em_iteration):
     em_metrics = {}
     for i in range(len(eta)):
-        em_metrics['group ' + str(i)] = eta[i]
-        wandb.log(em_metrics, step=em_iteration)
+        em_metrics['eta_ ' + str(i)] = eta[i]
+        em_metrics['em_iteration'] = em_iteration
+        wandb.log(em_metrics)
 
 
 def get_open_port():
