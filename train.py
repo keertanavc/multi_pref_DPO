@@ -36,7 +36,8 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
             project=config.wandb.project,
             config=OmegaConf.to_container(config),
             dir=get_local_dir(config.local_dirs),
-            name=config.exp_name,
+            # name=config.exp_name,
+            name = config.exp_name + '_group=' + str(dynamic_params['group']) + '_emstep=' + str(dynamic_params['em_iteration']),
         )
 
     TrainerClass = getattr(trainers, config.trainer)
