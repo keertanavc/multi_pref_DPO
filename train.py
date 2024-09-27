@@ -45,17 +45,14 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     trainer.train()
 
     # update gammas and etas at the end of a single EM-iteration
-    print('updating gammas once all training is complete.')
-    if rank == 0:
-        dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior()
-        if dynamic_params['group'] == config.num_groups - 1:
-            dynamic_params['gamma'], dynamic_params['eta'] = update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
-            if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
-                wandb.finish()
+    print('updating gammas once all training is complete...')
+    dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior()
+    if dynamic_params['group'] == config.num_groups - 1:
+        dynamic_params['gamma'], dynamic_params['eta'] = update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
+        if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
+            trainer.save()
+            wandb.finish()
 
-    # save models at the end of the EM algorithm
-    if dynamic_params['em_iteration'] == dynamic_params['TOTAL_ITERATIONS']:
-        trainer.save()
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
 def train_weighted_dpo(config: DictConfig, dynamic_params: Dict = None):
