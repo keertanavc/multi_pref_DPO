@@ -98,6 +98,9 @@ num_groups: 2
 # no of iterations of the em algorithm
 em_steps: 50
 
+# the em steps after which the models are saved
+em_iteration_save: 5
+
 defaults:
 - _self_
 - model: blank_model_fp32 # basic model configuration

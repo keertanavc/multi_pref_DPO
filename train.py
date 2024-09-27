@@ -49,7 +49,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     print(f'updating gammas for group', dynamic_params['group'])
     print('gammas:', dynamic_params['log_numerator_gamma'])
 
-    if dynamic_params['em_iteration'] + 1 % 10 == 0:
+    if dynamic_params['em_iteration'] % config.em_iteration_save == 0:
         trainer.save()
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
