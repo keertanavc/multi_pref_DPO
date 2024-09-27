@@ -3,7 +3,7 @@ from collections import defaultdict
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
 import transformers
-from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
+from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, update_eta_gamma
 import os
 import hydra
 import torch.multiprocessing as mp
@@ -43,6 +43,12 @@ def main(config: DictConfig):
 
             dynamic_params['group'] = group
             train_weighted_dpo(config, dynamic_params)
+            if group == config.num_groups - 1:
+                dynamic_params['gamma'], dynamic_params['eta'] = \
+                    update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
+
+    if not config.debug:
+        wandb.finish()
 
 if __name__ == '__main__':
     main()

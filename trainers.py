@@ -478,7 +478,6 @@ class BasicTrainer(object):
         if self.dynamic_params:
             if self.group == self.num_groups - 1 and self.rank == 0:
                 rank0_print('m step completed for iteration', self.dynamic_params['em_iteration'])
-                    # return self.update_eta_gamma()
 
 
     def compute_posterior(self):

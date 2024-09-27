@@ -50,11 +50,8 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior().to('cpu')
     print(dynamic_params['log_numerator_gamma'], dynamic_params['group'])
 
-    if dynamic_params['group'] == config.num_groups - 1:
-        dynamic_params['gamma'], dynamic_params['eta'] = update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
-        if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
-            trainer.save()
-            wandb.finish()
+    if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
+        trainer.save()
 
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
