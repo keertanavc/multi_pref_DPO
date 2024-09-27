@@ -45,9 +45,10 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     trainer.train()
 
     # update gammas and etas at the end of a single EM-iteration
-    print('dynamic params device:', dynamic_params['log_numerator_gamma'].device)
-    print('updating gammas once all training is complete...')
-    dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior().to(dynamic_params['log_numerator_gamma'].device)
+    # print('dynamic params device:', dynamic_params['log_numerator_gamma'].device)
+    print(f'updating gammas for group {dynamic_params.group} training is complete...')
+    dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior().to('cpu')
+    print(dynamic_params['log_numerator_gamma'], dynamic_params['group'])
 
     if dynamic_params['group'] == config.num_groups - 1:
         dynamic_params['gamma'], dynamic_params['eta'] = update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
