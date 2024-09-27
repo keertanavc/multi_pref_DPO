@@ -49,9 +49,8 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     print(f'updating gammas for group', dynamic_params['group'])
     print('gammas:', dynamic_params['log_numerator_gamma'])
 
-    if dynamic_params['em_iteration']  == dynamic_params['TOTAL_ITERATIONS']:
+    if dynamic_params['em_iteration'] + 1 % 10 == 0:
         trainer.save()
-
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
 def train_weighted_dpo(config: DictConfig, dynamic_params: Dict = None):
