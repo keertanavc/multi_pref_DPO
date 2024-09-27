@@ -164,12 +164,13 @@ def update_eta_gamma(log_numerator_gamma, em_step):
     print('updated etas, new etas are')
     print(eta)
 
+    return gamma, eta
+
+def log_eta(eta, em_iteration):
     em_metrics = {}
     for i in range(len(eta)):
         em_metrics['group ' + str(i)] = eta[i]
-        wandb.log(em_metrics, step=em_step)
-
-    return gamma, eta
+        wandb.log(em_metrics, step=em_iteration)
 
 
 class TemporarilySeededRandom:
