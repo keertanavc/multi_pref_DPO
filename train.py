@@ -46,7 +46,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
     # update gammas and etas at the end of a single EM-iteration
     # print('dynamic params device:', dynamic_params['log_numerator_gamma'].device)
-    print(f'updating gammas for group {dynamic_params.group} training is complete...')
+    print(f'updating gammas for group', dynamic_params['group'])
     dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior().to('cpu')
     print(dynamic_params['log_numerator_gamma'], dynamic_params['group'])
 
