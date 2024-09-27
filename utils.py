@@ -32,7 +32,6 @@ def log_eta(eta, em_iteration):
         em_metrics['em_iteration'] = em_iteration
         wandb.log(em_metrics)
 
-
 def get_open_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('', 0)) # bind to all interfaces and use an OS provided port
