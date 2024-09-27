@@ -188,8 +188,8 @@ class BasicTrainer(object):
             self.eta = self.dynamic_params['eta'].to(self.rank)
         else:
             self.dynamic_params = None
-        if self.rank == 0 and self.config.wandb.enabled:
-            self.start_wandb()
+        # if self.rank == 0 and self.config.wandb.enabled:
+        #     self.start_wandb()
 
         data_iterator_kwargs = dict(
             names=config.datasets,
@@ -236,17 +236,17 @@ class BasicTrainer(object):
             self.posterior_batches = list(self.posterior_batches)
             rank0_print(f'Loaded train data iterator for posterior computing')
 
-    def start_wandb(self):
-        ''' Initiate wandb logging '''
-        print('initiate wandb log')
-        os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
-        wandb.init(
-            entity=self.config.wandb.entity,
-            project=self.config.wandb.project,
-            config=OmegaConf.to_container(self.config),
-            dir=get_local_dir(self.config.local_dirs),
-            name=self.config.exp_name + '_group' + str(self.group) + '_emstep' + str(self.dynamic_params['em_iteration']),
-        )
+    # def start_wandb(self):
+    #     ''' Initiate wandb logging '''
+    #     print('initiate wandb log')
+    #     os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
+    #     wandb.init(
+    #         entity=self.config.wandb.entity,
+    #         project=self.config.wandb.project,
+    #         config=OmegaConf.to_container(self.config),
+    #         dir=get_local_dir(self.config.local_dirs),
+    #         name=self.config.exp_name + '_group' + str(self.group) + '_emstep' + str(self.dynamic_params['em_iteration']),
+    #     )
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
