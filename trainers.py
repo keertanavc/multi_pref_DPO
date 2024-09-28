@@ -179,11 +179,13 @@ class BasicTrainer(object):
         if dynamic_params:
             self.dynamic_params = dynamic_params
             self.weights_dict = {}
+            self.weights_dict_allones = {}
             self.num_users = config.num_users
             self.num_groups = config.num_groups
             self.group = self.dynamic_params['group']
             for i in range(config.num_users):
                 self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
+                self.weights_dict_allones[i] = 1
             self.gamma = self.dynamic_params['gamma'].to(self.rank)
             self.eta = self.dynamic_params['eta'].to(self.rank)
         else:
@@ -196,13 +198,13 @@ class BasicTrainer(object):
             max_length=config.max_length,
             max_prompt_length=config.max_prompt_length,
             sft_mode=config.loss.name == 'sft',
-            weights_dict=self.weights_dict
+            # weights_dict=self.weights_dict
         )
 
         self.policy = policy
         self.reference_model = reference_model
 
-        self.train_iterator = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=config.n_epochs, n_examples=config.n_examples, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+        self.train_iterator = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict, split='train', n_epochs=config.n_epochs, n_examples=config.n_examples, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
         rank0_print(f'Loaded train data iterator')
         ###
         self.eval_iterator = []
@@ -210,10 +212,12 @@ class BasicTrainer(object):
         if 'imdb' in data_iterator_kwargs['names'][0]:
             data_iterator_kwargs_correct = deepcopy(data_iterator_kwargs)
             data_iterator_kwargs_correct['names'] = ['imdb_correctness']
+            data_iterator_kwargs_correct['weights_dict'] = self.weights_dict_allones
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_correct, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             data_iterator_kwargs_short = deepcopy(data_iterator_kwargs)
             data_iterator_kwargs_short['names'] = ['imdb_length']
+            data_iterator_kwargs_short['weights_dict'] = self.weights_dict_allones
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_short, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
@@ -222,7 +226,7 @@ class BasicTrainer(object):
             rank0_print(f'Loaded {len(self.eval_batches[0]) + len(self.eval_batches[1])} eval batches of size {config.eval_batch_size}')
             self.eval_data_names = ['imdb_correctness', 'imdb_length']
         else:
-            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
+            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
             self.eval_batches.append(list(self.eval_iterator[0]))
             rank0_print(f'Loaded {len(self.eval_batches[0])} eval batches of size {config.eval_batch_size} for correctness preference')
             self.eval_data_names = None
@@ -230,7 +234,7 @@ class BasicTrainer(object):
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
 
         if self.dynamic_params:
-            self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+            self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
             self.posterior_batches = list(self.posterior_batches)
             rank0_print(f'Loaded train data iterator for posterior computing')
 
