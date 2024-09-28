@@ -232,7 +232,7 @@ class BasicTrainer(object):
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
 
         if self.dynamic_params:
-            self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='train_post', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+            self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
             self.posterior_batches = list(self.posterior_batches)
             rank0_print(f'Loaded train data iterator for posterior computing')
 
