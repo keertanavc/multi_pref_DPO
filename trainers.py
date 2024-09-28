@@ -221,8 +221,6 @@ class BasicTrainer(object):
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_short, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
-            print('eval batch length:')
-            print(len(self.eval_batches))
             rank0_print(f'Loaded {len(self.eval_batches[0]) + len(self.eval_batches[1])} eval batches of size {config.eval_batch_size}')
             self.eval_data_names = ['imdb_correctness', 'imdb_length']
         else:
@@ -482,11 +480,8 @@ class BasicTrainer(object):
                     label = local_batch['human_label'][i].to(self.rank)
                     losses = losses.to(self.rank)
                     local_value[0, label] += losses[i]
-        print('local: ', local_value, self.rank)
         global_value = all_gather_if_needed(local_value, self.rank, self.world_size)
-        print('global w/o agg: ', global_value, self.rank)
         global_value = torch.sum(global_value, axis = 0)
-        print('global w. agg: ', global_value, self.rank)
         return torch.log(torch.tensor(self.eta[self.group])) + global_value
 
     def clip_gradient(self):
