@@ -29,7 +29,7 @@ from utils import (
     all_gather_if_needed,
     pad_to_length,
     get_block_class_from_model,
-    rank0_s,
+    rank0_print,
     get_local_dir,
     get_local_run_dir,
     init_distributed,
