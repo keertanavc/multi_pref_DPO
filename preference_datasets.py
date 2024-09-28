@@ -365,12 +365,6 @@ def get_batch_iterator(names: List[str],
         datasets.logging.disable_progress_bar()
         datasets.logging.set_verbosity_error()
 
-    flag = 0
-
-    if split == 'train_post':
-        split = 'train'
-        flag = 1
-
     with TemporarilySeededRandom(seed):
         permutation_seeds = iter(np.random.randint(0, 2**32, size=1000000))
         flat_data = []
@@ -379,9 +373,6 @@ def get_batch_iterator(names: List[str],
             for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
                 assert (len(data['weight']) == len(data['pairs'])) and (len(data['human_label']) == len(data['pairs']))
                 flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
-                if flag == 1:
-                    print('printing posterior data weights!!')
-                    print(data['weight'])
     collate_fn = get_collate_fn(tokenizer)
 
     epoch_idx = 0
