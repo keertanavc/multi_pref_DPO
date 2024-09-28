@@ -26,6 +26,7 @@ def update_eta_gamma(log_numerator_gamma, em_step):
     return gamma, eta
 
 def log_eta(eta, em_iteration):
+    '''Log eta values for all groups on wandb'''
     em_metrics = {}
     for i in range(len(eta)):
         em_metrics['eta_ ' + str(i)] = eta[i]
