@@ -22,16 +22,9 @@ import torch
 def main(config: DictConfig):
     dynamic_params = {}
     # initially all users are equally likely to be from any subgroup
-    dynamic_params['gamma'] = torch.rand(2, 4)
+    dynamic_params['gamma'] = torch.rand(config.num_groups, config.num_users)
     dynamic_params['gamma'] /= dynamic_params['gamma'].sum(axis=0)
     dynamic_params['eta'] = dynamic_params['gamma'].mean(axis=1)
-
-    # mat = torch.rand(2, 4)
-    # mat /= mat.sum(axis=0)
-    # print(mat.sum(axis=1))
-    # print(mat.mean(axis=1))
-    # dynamic_params['gamma'] = torch.ones(config.num_groups, config.num_users) * (1 / config.num_groups)
-    # dynamic_params['eta'] = torch.ones(config.num_groups) * (1 / config.num_groups)
 
     # variables to keep track of EM step iterations
     dynamic_params['TOTAL_ITERATIONS'] = config.em_steps
