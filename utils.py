@@ -31,6 +31,7 @@ def log_eta(eta, em_iteration):
     for i in range(len(eta)):
         em_metrics['eta_ ' + str(i)] = eta[i]
         em_metrics['em_iteration'] = em_iteration
+        print('em_metrics', em_metrics)
         wandb.log(em_metrics)
 
 def get_open_port():
