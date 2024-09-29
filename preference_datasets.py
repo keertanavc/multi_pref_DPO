@@ -162,7 +162,8 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
     # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_small", split=split, cache_dir=cache_dir)
-    dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference", split=split, cache_dir=cache_dir)
+    # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference", split=split, cache_dir=cache_dir)
+    dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_v2", split=split, cache_dir=cache_dir)
     print('done')
     def split_prompt_and_responses(ex):
         row_data = {}
