@@ -94,9 +94,9 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
         losses = -F.logsigmoid(beta * logits) * (1 - label_smoothing) - F.logsigmoid(-beta * logits) * label_smoothing
         if weight.numel() > 0: ###
             losses *= weight ###
-        # note that we're not weighing the reward modelss
-        chosen_rewards =  beta * (policy_chosen_logps - reference_chosen_logps).detach()
-        rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
+    # note that we're not weighing the reward models
+    chosen_rewards =  beta * (policy_chosen_logps - reference_chosen_logps).detach()
+    rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
     return losses, chosen_rewards, rejected_rewards
 
@@ -594,7 +594,7 @@ class FSDPTrainer(BasicTrainer):
         """Save policy, optimizer, and scheduler state to disk, gathering from all processes and saving only on the rank 0 process."""
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
         output_dir = os.path.join(self.run_dir, f'group-{self.group}')
-        
+
         with FSDP.state_dict_type(self.policy, StateDictType.FULL_STATE_DICT, state_dict_config=save_policy):
             policy_state_dict = self.policy.state_dict()
 
