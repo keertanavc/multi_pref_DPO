@@ -37,7 +37,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
             dir=get_local_dir(config.local_dirs),
             name = config.exp_name + '_group=' + str(dynamic_params['group']) + '_emstep=' + str(dynamic_params['em_iteration']),
         )
-        if config.group == 0:
+        if dynamic_params['group'] == 0:
             log_eta(dynamic_params['eta'], dynamic_params['em_iteration'])
 
     TrainerClass = getattr(trainers, config.trainer)
