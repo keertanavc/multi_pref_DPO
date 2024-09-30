@@ -48,8 +48,8 @@ def main(config: DictConfig):
                 dynamic_params['gamma'], dynamic_params['eta'] = \
                     update_eta_gamma(dynamic_params['log_numerator_gamma'], dynamic_params['em_iteration'])
 
-    if not config.debug:
-        wandb.finish()
+    # if not config.debug:
+    #     wandb.finish()
 
 if __name__ == '__main__':
     main()
