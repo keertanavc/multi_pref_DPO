@@ -94,9 +94,11 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
         losses = -F.logsigmoid(beta * logits) * (1 - label_smoothing) - F.logsigmoid(-beta * logits) * label_smoothing
         if weight.numel() > 0: ###
             losses *= weight ###
-
-    chosen_rewards =  beta * (weight * (policy_chosen_logps - reference_chosen_logps)).detach()
-    rejected_rewards = beta * (weight * (policy_rejected_logps - reference_rejected_logps)).detach()
+            chosen_rewards =  beta * (weight * (policy_chosen_logps - reference_chosen_logps)).detach()
+            rejected_rewards = beta * (weight * (policy_rejected_logps - reference_rejected_logps)).detach()
+        else:
+            chosen_rewards =  beta * (policy_chosen_logps - reference_chosen_logps).detach()
+            rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
     return losses, chosen_rewards, rejected_rewards
 
