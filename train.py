@@ -37,7 +37,8 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
             dir=get_local_dir(config.local_dirs),
             name = config.exp_name + '_group=' + str(dynamic_params['group']) + '_emstep=' + str(dynamic_params['em_iteration']),
         )
-        log_eta(dynamic_params['eta'], dynamic_params['em_iteration'])
+        if config.group == 0:
+            log_eta(dynamic_params['eta'], dynamic_params['em_iteration'])
 
     TrainerClass = getattr(trainers, config.trainer)
     print(f'Creating trainer on process {rank} with world size {world_size}')
@@ -50,6 +51,8 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
     if dynamic_params['em_iteration'] % config.em_iteration_save == 0:
         trainer.save()
+    if rank == 0 and config.wandb.enabled:
+        wandb.finish()
 
 # @hydra.main(version_base=None, config_path="config", config_name="config")
 def train_weighted_dpo(config: DictConfig, dynamic_params: Dict = None):
