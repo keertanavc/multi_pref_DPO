@@ -183,6 +183,7 @@ class BasicTrainer(object):
             self.num_users = config.num_users
             self.num_groups = config.num_groups
             self.group = self.dynamic_params['group']
+            self.em_iteration = self.dynamic_params['em_iteration']
             for i in range(config.num_users):
                 self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
                 self.weights_dict_allones[i] = 1
@@ -412,13 +413,13 @@ class BasicTrainer(object):
                             if self.config.loss.name in {'dpo', 'ipo'}:
                                 wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
 
-                    if self.example_counter > 0:
-                        if self.config.debug:
-                            rank0_print('skipping save in debug mode')
-                        else:
-                            output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
-                            rank0_print(f'creating checkpoint to write to {output_dir}...')
-                            self.save(output_dir, mean_eval_metrics)
+                    # if self.example_counter > 0:
+                    #     if self.config.debug:
+                    rank0_print('skipping save in debug mode')
+                        # else:
+                            # output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
+                            # rank0_print(f'creating checkpoint to write to {output_dir}...')
+                            # self.save(output_dir, mean_eval_metrics)
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####
@@ -505,16 +506,21 @@ class BasicTrainer(object):
     def save(self, output_dir: Optional[str] = None, metrics: Optional[Dict] = None):
         """Save policy, optimizer, and scheduler state to disk."""
 
+        output_dir = os.path.join(self.run_dir, f'group-{self.group}')
+
         policy_state_dict = self.policy.state_dict()
-        self.write_state_dict(self.example_counter, policy_state_dict, metrics, 'policy.pt', output_dir)
+        policy_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_policy.pt'
+        self.write_state_dict(self.example_counter, policy_state_dict, metrics, policy_filename, output_dir)
         del policy_state_dict
 
+        optimizer_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_optimizer.pt'
         optimizer_state_dict = self.optimizer.state_dict()
-        self.write_state_dict(self.example_counter, optimizer_state_dict, metrics, 'optimizer.pt', output_dir)
+        self.write_state_dict(self.example_counter, optimizer_state_dict, metrics, optimizer_filename, output_dir)
         del optimizer_state_dict
 
+        scheduler_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_scheduler.pt'
         scheduler_state_dict = self.scheduler.state_dict()
-        self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, 'scheduler.pt', output_dir)
+        self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, scheduler_filename, output_dir)
 
 
 class FSDPTrainer(BasicTrainer):
@@ -587,11 +593,14 @@ class FSDPTrainer(BasicTrainer):
     def save(self, output_dir=None, metrics=None):
         """Save policy, optimizer, and scheduler state to disk, gathering from all processes and saving only on the rank 0 process."""
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
+        output_dir = os.path.join(self.run_dir, f'group-{self.group}')
+        
         with FSDP.state_dict_type(self.policy, StateDictType.FULL_STATE_DICT, state_dict_config=save_policy):
             policy_state_dict = self.policy.state_dict()
 
         if self.rank == 0:
-            self.write_state_dict(self.example_counter, policy_state_dict, metrics, 'policy.pt', output_dir)
+            policy_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_policy.pt'
+            self.write_state_dict(self.example_counter, policy_state_dict, metrics, policy_filename, output_dir)
         del policy_state_dict
         dist.barrier()
 
@@ -600,13 +609,15 @@ class FSDPTrainer(BasicTrainer):
             optimizer_state_dict = FSDP.optim_state_dict(self.policy, self.optimizer)
 
         if self.rank == 0:
-            self.write_state_dict(self.example_counter, optimizer_state_dict, metrics, 'optimizer.pt', output_dir)
+            optimizer_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_optimizer.pt'
+            self.write_state_dict(self.example_counter, optimizer_state_dict, metrics, optimizer_filename, output_dir)
         del optimizer_state_dict
         dist.barrier()
 
         if self.rank == 0:
+            scheduler_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_scheduler.pt'
             scheduler_state_dict = self.scheduler.state_dict()
-            self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, 'scheduler.pt', output_dir)
+            self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, scheduler_filename, output_dir)
         dist.barrier()
 
 
