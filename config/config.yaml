@@ -24,7 +24,7 @@ datasets:
 wandb:
   enabled: true
   entity: null
-  project: "em-dpo-v2"
+  project: "em-dpo-v3"
 
 # to create the local run directory and cache models/datasets,
 #   we will try each of these directories in order; if none exist,
@@ -96,7 +96,7 @@ num_users: 20
 num_groups: 2
 
 # no of iterations of the em algorithm
-em_steps: 50
+em_steps: 10
 
 # the em steps after which the models are saved
 em_iteration_save: 5
