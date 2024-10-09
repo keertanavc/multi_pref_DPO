@@ -94,7 +94,8 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
         losses = -F.logsigmoid(beta * logits) * (1 - label_smoothing) - F.logsigmoid(-beta * logits) * label_smoothing
         if weight.numel() > 0: ###
             losses *= weight ###
-    # note that we're not weighing the reward models
+
+    # note that we're not weighing the reward modelss
     chosen_rewards =  beta * (policy_chosen_logps - reference_chosen_logps).detach()
     rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
@@ -212,18 +213,18 @@ class BasicTrainer(object):
         self.eval_batches = []
         if 'imdb' in data_iterator_kwargs['names'][0]:
             data_iterator_kwargs_correct = deepcopy(data_iterator_kwargs)
-            data_iterator_kwargs_correct['names'] = ['imdb_correctness']
+            data_iterator_kwargs_correct['names'] = ['imdb_grammar']
             data_iterator_kwargs_correct['weights_dict'] = self.weights_dict_allones
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_correct, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             data_iterator_kwargs_short = deepcopy(data_iterator_kwargs)
-            data_iterator_kwargs_short['names'] = ['imdb_length']
+            data_iterator_kwargs_short['names'] = ['imdb_sentiment']
             data_iterator_kwargs_short['weights_dict'] = self.weights_dict_allones
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_short, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
 
             self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
             rank0_print(f'Loaded {len(self.eval_batches[0]) + len(self.eval_batches[1])} eval batches of size {config.eval_batch_size}')
-            self.eval_data_names = ['imdb_correctness', 'imdb_length']
+            self.eval_data_names = ['imdb_grammar', 'imdb_sentiment']
         else:
             self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
             self.eval_batches.append(list(self.eval_iterator[0]))
@@ -285,7 +286,7 @@ class BasicTrainer(object):
         if imdb_pref is None:
             train_test = 'train' if train else 'eval'
         else:
-            train_test = 'train' if train else ('eval_correct' if imdb_pref == 'imdb_correctness' else 'eval_length')
+            train_test = 'train' if train else ('eval_gramar' if imdb_pref == 'imdb_grammar' else 'eval_sentiment')
 
         if loss_config.name in {'dpo', 'ipo'}:
             policy_chosen_logps, policy_rejected_logps = self.concatenated_forward(self.policy, batch)
@@ -413,13 +414,13 @@ class BasicTrainer(object):
                             if self.config.loss.name in {'dpo', 'ipo'}:
                                 wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
 
-                    # if self.example_counter > 0:
-                    #     if self.config.debug:
-                    rank0_print('skipping save in debug mode')
-                        # else:
-                            # output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
-                            # rank0_print(f'creating checkpoint to write to {output_dir}...')
-                            # self.save(output_dir, mean_eval_metrics)
+                    if self.example_counter > 0:
+                        if self.config.debug:
+                            rank0_print('skipping save in debug mode')
+                        else:
+                            output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
+                            rank0_print(f'creating checkpoint to write to {output_dir}...')
+                            self.save(output_dir, mean_eval_metrics)
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####
