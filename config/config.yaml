@@ -24,7 +24,7 @@ datasets:
 wandb:
   enabled: true
   entity: null
-  project: "em-dpo-v3"
+  project: "em-dpo-sentiment-grammar-v4"
 
 # to create the local run directory and cache models/datasets,
 #   we will try each of these directories in order; if none exist,
