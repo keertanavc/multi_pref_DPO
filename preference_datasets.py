@@ -163,7 +163,8 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
     # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_small", split=split, cache_dir=cache_dir)
     # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference", split=split, cache_dir=cache_dir)
-    dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_v2", split=split, cache_dir=cache_dir)
+    # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_v2", split=split, cache_dir=cache_dir)
+    dataset = datasets.load_dataset("keertanavc/imdb_sentiment_grammar_dpo_multipreference", split=split, cache_dir=cache_dir)
     print('done')
     def split_prompt_and_responses(ex):
         row_data = {}
@@ -188,11 +189,11 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
         row_data = split_prompt_and_responses(row)
         pref_type = row_data['pref_type']
-        if name == 'imdb_correctness':
-            if pref_type == 2:
+        if name == 'imdb_sentiment':
+            if pref_type != 2:
                 continue
-        elif name == 'imdb_length':
-            if pref_type == 1:
+        elif name == 'imdb_grammar':
+            if pref_type != 1:
                 continue
         prompt = row_data['prompt']
         chosen = row_data['chosen_response']
