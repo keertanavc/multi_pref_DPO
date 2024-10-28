@@ -186,9 +186,19 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         return row_data
 
     data = defaultdict(lambda: defaultdict(list))
+    n_sample_type1 = 0
+    n_sample_type2 = 0
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
         row_data = split_prompt_and_responses(row)
         pref_type = row_data['pref_type']
+        if pref_type == 1 and split == "test":
+            n_sample_type1 += 1
+            if n_sample_type1 > 5000:
+                continue
+        if pref_type == 2 and split == "test":
+            n_sample_type2 += 1
+            if n_sample_type2 > 5000:
+                continue
         if name == 'imdb_sentiment':
             if pref_type != 2:
                 continue
