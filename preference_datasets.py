@@ -193,11 +193,11 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         pref_type = row_data['pref_type']
         if pref_type == 1 and split == "test":
             n_sample_type1 += 1
-            if n_sample_type1 > 5000:
+            if n_sample_type1 > 1000:
                 continue
         if pref_type == 2 and split == "test":
             n_sample_type2 += 1
-            if n_sample_type2 > 5000:
+            if n_sample_type2 > 1000:
                 continue
         if name == 'imdb_sentiment':
             if pref_type != 2:
