@@ -17,13 +17,29 @@ import resource
 from train import train_weighted_dpo
 import torch
 
+import random
+import numpy as np
+import torch
+
+def set_seed(seed):
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    torch.cuda.manual_seed(seed_value)
+    torch.cuda.manual_seed_all(seed_value)  # If you use multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 # def compute_posterior(policies):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(config: DictConfig):
+    set_seed = 60
+    set_seed(seed)
     dynamic_params = {}
-    # initially all users are equally likely to be from any subgroup
-    dynamic_params['gamma'] = torch.rand(config.num_groups, config.num_users)
-    dynamic_params['gamma'] /= dynamic_params['gamma'].sum(axis=0)
+    # initialize from a dirichelet distribution
+    # dynamic_params['gamma'] = torch.rand(config.num_groups, config.num_users)
+    # dynamic_params['gamma'] /= dynamic_params['gamma'].sum(axis=0)
+    dynamic_params['gamma'] = np.random.dirichlet((10, 5), config.num_users).T #make changes for a diff no. of group
     dynamic_params['eta'] = dynamic_params['gamma'].mean(axis=1)
 
     # variables to keep track of EM step iterations
