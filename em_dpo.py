@@ -21,20 +21,11 @@ import random
 import numpy as np
 import torch
 
-# def set_seed(seed):
-#     random.seed(seed_value)
-#     np.random.seed(seed_value)
-#     torch.manual_seed(seed_value)
-#     torch.cuda.manual_seed(seed_value)
-#     torch.cuda.manual_seed_all(seed_value)  # If you use multi-GPU
-#     torch.backends.cudnn.deterministic = True
-#     torch.backends.cudnn.benchmark = False
-
 # def compute_posterior(policies):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(config: DictConfig):
     set_seed = 60
-    np.random.seed(seed_value)
+    np.random.seed(set_seed)
     dynamic_params = {}
     # initialize from a dirichelet distribution
     # dynamic_params['gamma'] = torch.rand(config.num_groups, config.num_users)
