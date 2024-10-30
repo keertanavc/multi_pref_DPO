@@ -31,6 +31,7 @@ def main(config: DictConfig):
     # dynamic_params['gamma'] = torch.rand(config.num_groups, config.num_users)
     # dynamic_params['gamma'] /= dynamic_params['gamma'].sum(axis=0)
     dynamic_params['gamma'] = np.random.dirichlet((10, 5), config.num_users).T #make changes for a diff no. of group
+    dynamic_params['gamma'] = torch.tensor(dynamic_params['gamma'])
     dynamic_params['eta'] = dynamic_params['gamma'].mean(axis=1)
 
     # variables to keep track of EM step iterations
