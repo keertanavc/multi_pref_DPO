@@ -1,3 +1,8 @@
+'''
+Modified from https://github.com/eric-mitchell/direct-preference-optimization
+'''
+
+
 import datasets
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -11,160 +16,12 @@ import numpy as np
 from typing import Dict, List, Optional, Iterator, Callable, Union, Tuple
 
 
-def extract_anthropic_prompt(prompt_and_response):
-    """Extract the anthropic prompt from a prompt and response pair."""
-    search_term = '\n\nAssistant:'
-    search_term_idx = prompt_and_response.rfind(search_term)
-    assert search_term_idx != -1, f"Prompt and response does not contain '{search_term}'"
-    return prompt_and_response[:search_term_idx + len(search_term)]
-
-
-def strip_html_tags(html_string):
-    """Strip HTML tags from a string, except for <code> tags (which contain real code in the StackExchange answers)."""
-    # Create a BeautifulSoup object
-    soup = BeautifulSoup(html_string, 'html.parser')
-
-    # Initialize an empty list to store the text
-    text = []
-    for element in soup.children:
-        if isinstance(element, NavigableString):
-            continue
-        if element.name == 'p':
-            text.append(''.join(child.string for child in element.children if isinstance(child, NavigableString)))
-        elif element.name == 'pre':
-            for code in element.find_all('code'):
-                text.append("<code>" + code.get_text() + "</code>")
-        elif element.name == 'code':
-            text.append("<code>" + element.get_text() + "</code>")
-
-    # Join the text together with newlines in between
-    text = "\n\n".join(text)
-
-    return text
-
-
-def get_se(split, silent=False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    """Load the StackExchange dataset from Huggingface, and return a dict of prompts and responses. See get_hh for the format.
-
-       We strip the HTML tags from the responses (except for <code> tags), and we add necessary newlines.
-    """
-    print(f'Loading SE dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences', cache_dir=cache_dir, chunksize=5 << 20)['train']
-    print('done')
-
-    # shuffle the dataset and select 1% for test
-    dataset = dataset.shuffle(seed=42)
-    dataset = dataset.select(range(int(len(dataset) * 0.01))) if split == 'test' else dataset.select(
-        range(int(len(dataset) * 0.01), len(dataset)))
-
-    def strip_html(x):
-        x['question'] = strip_html_tags(x['question'])
-        for a in x['answers']:
-            a['text'] = strip_html_tags(a['text'])
-        return x
-
-    dataset = dataset.map(strip_html, num_proc=64)
-
-    data = defaultdict(dict)
-    for row in tqdm.tqdm(dataset, desc='Processing SE', disable=silent):
-        prompt = '\n\nHuman: ' + row['question'] + '\n\nAssistant:'
-        responses = [' ' + a['text'] for a in row['answers']]
-        scores = [a['pm_score'] for a in row['answers']]
-
-        pairs = []
-        for i in range(len(responses)):
-            for j in range(i + 1, len(responses)):
-                pairs.append((i, j) if scores[i] > scores[j] else (j, i))
-
-        data[prompt]['responses'] = responses
-        data[prompt]['pairs'] = pairs
-        data[prompt]['sft_target'] = max(responses, key=lambda x: scores[responses.index(x)])
-
-    return data
-
-def get_shp(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    """Load the Stanford Human Preferences dataset from Huggingface and convert it to the necessary format. See hh for the format.
-
-       We filter preference pairs to only keep pairs where the score ratio is at least 2.
-       For this dataset, the sft_target is the response with the highest score.
-    """
-    print(f'Loading SHP dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('stanfordnlp/SHP', split=split, cache_dir=cache_dir)
-    print('done')
-
-    data = defaultdict(lambda: defaultdict(list))
-    for row in tqdm.tqdm(dataset, desc='Processing SHP', disable=silent):
-        prompt = '\n\nHuman: ' + row['history'] + '\n\nAssistant:'
-        responses = [' ' + row['human_ref_A'], ' ' + row['human_ref_B']]
-        scores = [row['score_A'], row['score_B']]
-        if prompt in data:
-            n_responses = len(data[prompt]['responses'])
-        else:
-            n_responses = 0
-        score_ratio = max(scores[0] / scores[1], scores[1] / scores[0])
-        if score_ratio < 2:
-            continue
-
-        # according to https://huggingface.co/datasets/stanfordnlp/SHP
-        data[prompt]['pairs'].append((n_responses, n_responses + 1) if row['labels'] == 1 else (n_responses + 1, n_responses))
-        data[prompt]['responses'].extend(responses)
-        data[prompt]['scores'].extend(scores)
-
-    for prompt in data:
-        data[prompt]['sft_target'] = max(data[prompt]['responses'], key=lambda x: data[prompt]['scores'][data[prompt]['responses'].index(x)])
-        del data[prompt]['scores']
-
-    return data
-
-def get_hh(split: str, silent: bool = False, cache_dir: str = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
-    """Load the Anthropic Helpful-Harmless dataset from Huggingface and convert it to the necessary format.
-
-       The dataset is converted to a dictionary with the following structure:
-       {
-           'prompt1': {
-               'responses': List[str],
-               'pairs': List[Tuple[int, int]],
-               'sft_target': str
-           },
-           'prompt2': {
-               ...
-           },
-       }
-
-       Prompts should be structured as follows:
-         \n\nHuman: <prompt>\n\nAssistant:
-       Multiple turns are allowed, but the prompt should always start with \n\nHuman: and end with \n\nAssistant:.
-
-       For this dataset, the sft_target is just the chosen response.
-    """
-    print(f'Loading HH dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('Anthropic/hh-rlhf', split=split, cache_dir=cache_dir)
-    print('done')
-
-    def split_prompt_and_responses(ex):
-        prompt = extract_anthropic_prompt(ex['chosen'])
-        chosen_response = ex['chosen'][len(prompt):]
-        rejected_response = ex['rejected'][len(prompt):]
-        return prompt, chosen_response, rejected_response
-
-    data = defaultdict(lambda: defaultdict(list))
-    for row in tqdm.tqdm(dataset, desc='Processing HH', disable=silent):
-        prompt, chosen, rejected = split_prompt_and_responses(row)
-        responses = [chosen, rejected]
-        n_responses = len(data[prompt]['responses'])
-        data[prompt]['pairs'].append((n_responses, n_responses + 1))
-        data[prompt]['responses'].extend(responses)
-        data[prompt]['sft_target'] = chosen
-
-    return data
 
 def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
     print(f'Loading IMDb dataset ({split} split) from Huggingface...')
-    # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_small", split=split, cache_dir=cache_dir)
-    # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference", split=split, cache_dir=cache_dir)
-    # dataset = datasets.load_dataset("keertanavc/imdb_prefix20_forDPO_multi-preference_v2", split=split, cache_dir=cache_dir)
-    dataset = datasets.load_dataset("keertanavc/imdb_sentiment_grammar_dpo_multipreference", split=split, cache_dir=cache_dir)
+    #dataset = datasets.load_dataset("kvseet17/repeatsamplingimdb", split=split, cache_dir=cache_dir)
+    dataset = datasets.load_dataset("keertanavc/imdb_sentiment-grammar_indexed", split=split, cache_dir=cache_dir)
     print('done')
     def split_prompt_and_responses(ex):
         row_data = {}
@@ -172,13 +29,14 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         row_data['chosen_response'] = ex['chosen']
         row_data['rejected_response'] = ex['rejected']
         row_data['pref_type'] = ex['pref_type']
+        row_data['cluster'] = ex['cluster']
+        row_data['index'] = ex['index']
         if split == 'train':
             row_data['human_label'] = ex['human_label']
             row_data['weight'] = weights_dict[int(ex['human_label'])]
         elif split == 'test':
             row_data['human_label'] = -10
             row_data['weight'] = 1
-
         substring_to_remove = '<|endoftext|>'
         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
@@ -186,24 +44,21 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         return row_data
 
     data = defaultdict(lambda: defaultdict(list))
-    n_sample_type1 = 0
-    n_sample_type2 = 0
     for row in tqdm.tqdm(dataset, desc='Processing IMDb', disable=silent):
         row_data = split_prompt_and_responses(row)
         pref_type = row_data['pref_type']
-        if pref_type == 1 and split == "test":
-            n_sample_type1 += 1
-            if n_sample_type1 > 1000:
-                continue
-        if pref_type == 2 and split == "test":
-            n_sample_type2 += 1
-            if n_sample_type2 > 1000:
-                continue
+        cluster = row_data['cluster']
         if name == 'imdb_sentiment':
             if pref_type != 2:
                 continue
         elif name == 'imdb_grammar':
             if pref_type != 1:
+                continue
+        elif name == 'imdb_cluster0':
+            if cluster != 0:
+                continue
+        elif name == 'imdb_cluster1':
+            if cluster != 1:
                 continue
         prompt = row_data['prompt']
         chosen = row_data['chosen_response']
@@ -216,26 +71,127 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
         data[prompt]['pref_type'].append(pref_type)
         data[prompt]['human_label'].append(row_data['human_label'])
         data[prompt]['weight'].append(row_data['weight'])
+        data[prompt]['index'].append(row_data['index'])
     return data
 ###
 
+def get_globalopinion(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
+    print(f'Loading Global Opinion dataset ({split} split) from Huggingface...')
+    dataset = datasets.load_dataset("keertanavc/globalopinionv4", split=split, cache_dir=cache_dir)
+    print('done')
+    def split_prompt_and_responses(ex):
+        row_data = {}
+        row_data['prompt'] = ex['prompt']
+        row_data['chosen_response'] = ex['chosen']
+        row_data['rejected_response'] = ex['rejected']
+        row_data['pref_type'] = ex['pref_type']
+        row_data['cluster'] = ex['cluster']
+        row_data['index'] = ex['index']
+        if split == 'train':
+            row_data['human_label'] = ex['human_label']
+            row_data['weight'] = weights_dict[int(ex['human_label'])]
+        elif split == 'test':
+            row_data['human_label'] = -100
+            row_data['weight'] = 1
+        substring_to_remove = '<|endoftext|>'
+        row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
+        row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
+        row_data['rejected_response'] = row_data['rejected_response'].replace(substring_to_remove, "")
+        return row_data
+
+    data = defaultdict(lambda: defaultdict(list))
+    for row in tqdm.tqdm(dataset, desc='Processing Global Opinion LLM Dataset', disable=silent):
+        row_data = split_prompt_and_responses(row)
+        cluster = row_data['cluster']
+        pref_type = row_data['pref_type']
+        if 'cluster' in name: # give name as globalopinion_cluster_{i} to train only on cluster i
+            if int(cluster) != int(name[-1]):
+                continue
+        if name == 'globalopinion_in':
+            if pref_type != 'Indonesia':
+                continue
+        elif name == 'globalopinion_mx':
+            if pref_type != 'Mexico':
+                continue
+        elif name == 'globalopinion_pk':
+            if pref_type != 'Pakistan':
+                continue
+        elif name == 'globalopinion_br':
+            if pref_type != 'Britain':
+                continue
+        prompt = row_data['prompt']
+        chosen = row_data['chosen_response']
+        rejected = row_data['rejected_response']
+        responses = [chosen, rejected]
+        n_responses = len(data[prompt]['responses'])
+        data[prompt]['pairs'].append((n_responses, n_responses + 1))
+        data[prompt]['responses'].extend(responses)
+        data[prompt]['sft_target'] = chosen
+        data[prompt]['pref_type'].append(pref_type)
+        data[prompt]['human_label'].append(row_data['human_label'])
+        data[prompt]['weight'].append(row_data['weight'])
+        data[prompt]['index'].append(row_data['index'])
+    return data
+###
+
+# def get_personal(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+#     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
+#     print(f'Loading PersonalLLM dataset ({split} split) from Huggingface...')
+#     dataset = datasets.load_dataset("keertanavc/personalLLM", split=split, cache_dir=cache_dir)
+#     print('done')
+#     def split_prompt_and_responses(ex):
+#         row_data = {}
+#         row_data['prompt'] = ex['prompt']
+#         row_data['chosen_response'] = ex['chosen']
+#         row_data['rejected_response'] = ex['rejected']
+#         row_data['pref_type'] = ex['pref_type']
+#         row_data['cluster'] = ex['cluster']
+#         row_data['index'] = ex['index']
+#         if split == 'train':
+#             row_data['human_label'] = ex['human_label']
+#             row_data['weight'] = weights_dict[int(ex['human_label'])]
+#         elif split == 'test':
+#             row_data['human_label'] = -100
+#             row_data['weight'] = 1
+#         substring_to_remove = '<|endoftext|>'
+#         row_data['prompt'] = row_data['prompt'].replace(substring_to_remove, "")
+#         row_data['chosen_response'] = row_data['chosen_response'].replace(substring_to_remove, "")
+#         row_data['rejected_response'] = row_data['rejected_response'].replace(substring_to_remove, "")
+#         return row_data
+
+#     data = defaultdict(lambda: defaultdict(list))
+#     for row in tqdm.tqdm(dataset, desc='Processing Personal LLM Dataset', disable=silent):
+#         row_data = split_prompt_and_responses(row)
+#         cluster = row_data['cluster']
+#         if 'cluster' in name: # give name as personal_cluster{i} to train only on cluster i
+#             if int(cluster) != int(name[-1]):
+#                 continue
+#         prompt = row_data['prompt']
+#         chosen = row_data['chosen_response']
+#         rejected = row_data['rejected_response']
+#         responses = [chosen, rejected]
+#         n_responses = len(data[prompt]['responses'])
+#         data[prompt]['pairs'].append((n_responses, n_responses + 1))
+#         data[prompt]['responses'].extend(responses)
+#         data[prompt]['sft_target'] = chosen
+#         data[prompt]['pref_type'].append(row_data['pref_type'])
+#         data[prompt]['human_label'].append(row_data['human_label'])
+#         data[prompt]['weight'].append(row_data['weight'])
+#         data[prompt]['index'].append(row_data['index'])
+#     return data
+# ###
+
 def get_dataset(name: str, split: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None):
     """Load the given dataset by name. Supported by default are 'shp', 'hh', and 'se'."""
-    if name == 'shp':
-        data = get_shp(split, silent=silent, cache_dir=cache_dir)
-    elif name == 'hh':
-        data = get_hh(split, silent=silent, cache_dir=cache_dir)
-    elif name == 'se':
-        data = get_se(split, silent=silent, cache_dir=cache_dir)
-    elif 'imdb' in name:
+    if 'imdb' in name:
         data = get_imdb(split, name, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict)
+    # elif 'personal' in name:
+    #     data = get_personal(split, name, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict)
+    elif 'globalopinion' in name:
+        data = get_globalopinion(split, name, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict)
     else:
         raise ValueError(f"Unknown dataset '{name}'")
-    # assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
-    #     f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-    # condition2 = set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'weight'}, \
-    #     f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-
     return data
 
 
@@ -274,7 +230,7 @@ def get_collate_fn(tokenizer) -> Callable[[List[Dict]], Dict[str, Union[List, to
     return collate_fn
 
 
-def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length: int, weight: int, human_label: int) -> Dict:
+def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length: int, weight: int, human_label: int, index: int) -> Dict:
     """Tokenize a single batch element.
 
        At this stage, we don't convert to PyTorch tensors yet; we just handle the truncation
@@ -332,6 +288,7 @@ def tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_m
     batch['rejected_response_only'] = rejected
     batch['weight'] = weight
     batch['human_label'] = human_label
+    batch['index'] = index
 
     for k, toks in {'chosen': chosen_sequence_tokens, 'rejected': rejected_sequence_tokens, 'prompt': prompt_tokens}.items():
         for type_key, tokens in toks.items():
@@ -385,7 +342,7 @@ def get_batch_iterator(names: List[str],
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
             for prompt, data in get_dataset(name, split, silent=silent, cache_dir=cache_dir, weights_dict=weights_dict).items():
                 assert (len(data['weight']) == len(data['pairs'])) and (len(data['human_label']) == len(data['pairs']))
-                flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label']))
+                flat_data.append((prompt, data['responses'], data['pairs'], data['sft_target'], truncation_mode, data['weight'], data['human_label'], data['index']))
     collate_fn = get_collate_fn(tokenizer)
 
     epoch_idx = 0
@@ -402,17 +359,15 @@ def get_batch_iterator(names: List[str],
 
         batch = []
         for row in flat_data:
-            prompt = row[0]
-            responses = row[1]
-            pairs = row[2]
-            sft_target = row[3]
-            truncation_mode = row[4]
-            weight = torch.tensor(row[5])
-            human_label = torch.tensor(row[6])
+            prompt, responses, pairs, sft_target, truncation_mode = row[:5]
+            weight, human_label, index = row[5:8]
+            weight = torch.tensor(weight)
             if done:
                 break
             if sft_mode:
-                batch_element = tokenize_batch_element(prompt, sft_target, sft_target, truncation_mode, tokenizer, max_length, max_prompt_length)
+                # tokenize_batch_element(prompt: str, chosen: str, rejected: str, truncation_mode: str, tokenizer, max_length: int, max_prompt_length, weight, human_label, index)
+                batch_element = tokenize_batch_element(prompt, sft_target, sft_target, truncation_mode, tokenizer, max_length, max_prompt_length, 1, 0, index)
+                # batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
                 batch_element = {k: v for k, v in batch_element.items() if 'rejected' not in k}
                 batch.append(batch_element)
                 example_idx += 1
@@ -428,7 +383,7 @@ def get_batch_iterator(names: List[str],
                     if done:
                         break
                     indx = int(min(p[0], p[1])/2)
-                    batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx])
+                    batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx], index)
                     batch.append(batch_element)
                     example_idx += 1
                     if len(batch) == batch_size:

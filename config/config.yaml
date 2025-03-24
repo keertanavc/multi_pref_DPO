@@ -16,36 +16,41 @@ debug: false
 # the port to use for FSDP
 fsdp_port: null
 
-# which dataset(s) to train on; can pass a list like datasets=[hh,shp]
+# which dataset(s) to train on; options:
+# imdb = full imdb dataset
+# imdb_sentiment, imdb_grammar = sentiment or grammar preference type respectively
+# imdb_cluster0, imdb_cluster1 = cluster 0/1 from the k-means clustering algorithm
 datasets:
-- hh
+- imdb
 
 # wandb configuration
 wandb:
   enabled: true
   entity: null
-  project: "em-dpo-sentiment-grammar-v4"
+  project: "sentiment_grammar_final"
 
 # to create the local run directory and cache models/datasets,
 #   we will try each of these directories in order; if none exist,
 #   we will create the last one and use it
 local_dirs:
-  - /scr-ssd
-  - /scr
-  - .cache
-
-# whether or not to generate samples during evaluation; disable for FSDP/TensorParallel
-#   is recommended, because they are slow
-sample_during_eval: false
+  - temp
+  # - /scr-ssd
+  # - /scr
+  # - .cache
 
 # how many model samples to generate during evaluation
 n_eval_model_samples: 16
 
 # whether to eval at the very beginning of training
-do_first_eval: true
+do_first_eval: false
 
 # an OmegaConf resolver that returns the local run directory, calling a function in utils.py
-local_run_dir: ${get_local_run_dir:${exp_name},${local_dirs}}
+# local_run_dir: ${get_local_run_dir:${exp_name},${local_dirs}}
+combined_arg: "${exp_name}_seed${seed}"
+local_run_dir: ${get_local_run_dir:${combined_arg},${local_dirs}}
+# local_run_dir: ${get_local_run_dir:${exp_name},${seed},${local_dirs}}
+# local_run_dir: ${get_local_run_dir:${exp_name},${seed},${local_dirs}}
+
 
 # the learning rate
 lr: 5e-7
@@ -71,6 +76,7 @@ n_epochs: 1
 n_examples: null
 
 # the number of examples to evaluate on (and sample from, if sample_during_eval is true)
+sample_during_eval: False
 n_eval_examples: 256
 
 # the trainer class to use (e.g. BasicTrainer, FSDPTrainer, TensorParallelTrainer)
@@ -86,17 +92,20 @@ warmup_steps: 150
 activation_checkpointing: false
 
 # evaluate and save model every eval_every steps
-eval_every: 20_000
+eval_every: 50_000
 
 # prevent wandb from logging more than once per minimum_log_interval_secs
 minimum_log_interval_secs: 1.0
 
 # number of users and population sub-groups
-num_users: 20
-num_groups: 2
+num_users: 500 #=30 for full imdb data
+num_groups: 1 #set num_groups=1 to run regular DPO
+# dirichlet distribution for gamma initialization
+# dirichlet_alpha: [10, 5]
 
 # no of iterations of the em algorithm
-em_steps: 10
+# em_steps=1 for regular DPO
+em_steps: 5
 
 # the em steps after which the models are saved
 em_iteration_save: 5
@@ -105,3 +114,11 @@ defaults:
 - _self_
 - model: blank_model_fp32 # basic model configuration
 - loss: sft # which loss function, either sft or dpo (specify loss.beta if using dpo)
+
+# whether you need huggingface authorization
+huggingface_auth: True
+# huggingface token
+huggingface_token:  "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"
+
+# saving the model
+save_model: True
