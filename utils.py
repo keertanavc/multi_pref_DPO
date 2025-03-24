@@ -69,16 +69,14 @@ def get_local_dir(prefixes_to_resolve: List[str]) -> str:
     """Return the path to the cache directory for this user."""
     for prefix in prefixes_to_resolve:
         if os.path.exists(prefix):
-            return f"{prefix}/{getpass.getuser()}"
+            return f"{prefix}"
     os.makedirs(prefix)
-    return f"{prefix}/{getpass.getuser()}"
+    return f"{prefix}"
 
 
 def get_local_run_dir(exp_name: str, local_dirs: List[str]) -> str:
     """Create a local directory to store outputs for this run, and return its path."""
-    now = datetime.now()
-    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S_%f")
-    run_dir = f"{get_local_dir(local_dirs)}/{exp_name}_{timestamp}"
+    run_dir = f"{get_local_dir(local_dirs)}/{exp_name}"
     os.makedirs(run_dir, exist_ok=True)
     return run_dir
 
@@ -174,7 +172,6 @@ def init_distributed(rank: int, world_size: int, master_addr: str = 'localhost',
     dist.init_process_group(backend, rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-
 class TemporarilySeededRandom:
     def __init__(self, seed):
         """Temporarily set the random seed, and then restore it when exiting the context."""
@@ -188,8 +185,8 @@ class TemporarilySeededRandom:
         self.stored_np_state = np.random.get_state()
 
         # Set the random seed
-        random.seed(self.seed)
-        np.random.seed(self.seed)
+        random.seed(int(self.seed))
+        np.random.seed(int(self.seed))
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Restore the random state

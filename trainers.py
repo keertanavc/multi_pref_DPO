@@ -1,3 +1,7 @@
+'''
+Modified from https://github.com/eric-mitchell/direct-preference-optimization
+'''
+
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn.functional as F
@@ -5,10 +9,10 @@ import torch.nn as nn
 from torch.nn import LogSoftmax
 from torch.nn import Softmax
 import transformers
-# from omegaconf import DictConfig
 from omegaconf import OmegaConf, DictConfig
 
 import torch.distributed as dist
+
 from torch.distributed.fsdp import (
     FullyShardedDataParallel as FSDP,
     MixedPrecision,
@@ -39,6 +43,7 @@ from utils import (
 # from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
 
 import numpy as np
+import pandas as pd
 import wandb
 import tqdm
 
@@ -50,6 +55,7 @@ import json
 import functools
 from typing import Optional, Dict, List, Union, Tuple
 from copy import deepcopy
+import sys
 
 OmegaConf.register_new_resolver("get_local_run_dir", lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
 
@@ -62,23 +68,7 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
                     ipo: bool = False,
                     reference_free: bool = False,
                     weight: torch.FloatTensor = torch.tensor([])) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
-    """Compute the DPO loss for a batch of policy and reference model log probabilities.
-
-    Args:
-        policy_chosen_logps: Log probabilities of the policy model for the chosen responses. Shape: (batch_size,)
-        policy_rejected_logps: Log probabilities of the policy model for the rejected responses. Shape: (batch_size,)
-        reference_chosen_logps: Log probabilities of the reference model for the chosen responses. Shape: (batch_size,)
-        reference_rejected_logps: Log probabilities of the reference model for the rejected responses. Shape: (batch_size,)
-        beta: Temperature parameter for the DPO loss, typically something in the range of 0.1 to 0.5. We ignore the reference model as beta -> 0.
-        label_smoothing: conservativeness for DPO loss, which assumes that preferences are noisy (flipped with probability label_smoothing)
-        ipo: If True, use the IPO loss instead of the DPO loss.
-        reference_free: If True, we ignore the _provided_ reference model and implicitly use a reference model that assigns equal probability to all responses.
-
-    Returns:
-        A tuple of three tensors: (losses, chosen_rewards, rejected_rewards).
-        The losses tensor contains the DPO loss for each example in the batch.
-        The chosen_rewards and rejected_rewards tensors contain the rewards for the chosen and rejected responses, respectively.
-    """
+    """Compute the DPO loss for a bxtch of policy and reference model log probabilities"""
     pi_logratios = policy_chosen_logps - policy_rejected_logps
     ref_logratios = reference_chosen_logps - reference_rejected_logps
 
@@ -95,7 +85,7 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
         if weight.numel() > 0: ###
             losses *= weight ###
 
-    # note that we're not weighing the reward modelss
+    # note that we're not weighing the reward models, only the losses
     chosen_rewards =  beta * (policy_chosen_logps - reference_chosen_logps).detach()
     rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
@@ -103,16 +93,7 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
 
 
 def _get_batch_logps(logits: torch.FloatTensor, labels: torch.LongTensor, average_log_prob: bool = False) -> torch.FloatTensor:
-    """Compute the log probabilities of the given labels under the given logits.
-
-    Args:
-        logits: Logits of the model (unnormalized). Shape: (batch_size, sequence_length, vocab_size)
-        labels: Labels for which to compute the log probabilities. Label tokens with a value of -100 are ignored. Shape: (batch_size, sequence_length)
-        average_log_prob: If True, return the average log probability per (non-masked) token. Otherwise, return the sum of the log probabilities of the (non-masked) tokens.
-
-    Returns:
-        A tensor of shape (batch_size,) containing the average/sum log probabilities of the given labels under the given logits.
-    """
+    """Compute the log probabilities of the given labels under the given logits."""
     assert logits.shape[:-1] == labels.shape
 
     labels = labels[:, 1:].clone()
@@ -131,14 +112,7 @@ def _get_batch_logps(logits: torch.FloatTensor, labels: torch.LongTensor, averag
 
 
 def concatenated_inputs(batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-    """Concatenate the chosen and rejected inputs into a single tensor.
-
-    Args:
-        batch: A batch of data. Must contain the keys 'chosen_input_ids' and 'rejected_input_ids', which are tensors of shape (batch_size, sequence_length).
-
-    Returns:
-        A dictionary containing the concatenated inputs under the key 'concatenated_input_ids'.
-    """
+    """Concatenate the chosen and rejected inputs into a single tensor."""
     max_length = max(batch['chosen_input_ids'].shape[1], batch['rejected_input_ids'].shape[1])
     concatenated_batch = {}
     for k in batch:
@@ -159,11 +133,7 @@ def concatenated_inputs(batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict
 
 class BasicTrainer(object):
     def __init__(self, policy: nn.Module, config: DictConfig, seed: int, run_dir: str, reference_model: Optional[nn.Module] = None, rank: int = 0, world_size: int = 1, dynamic_params:Dict = None):
-        """A trainer for a language model, supporting either SFT or DPO training.
-
-           If multiple GPUs are present, naively splits the model across them, effectively
-           offering N times available memory, but without any parallel computation.
-        """
+        """A trainer for a language model, supporting either SFT or DPO training."""
         self.seed = seed
         self.rank = rank
         self.world_size = world_size
@@ -172,68 +142,67 @@ class BasicTrainer(object):
 
         tokenizer_name_or_path = config.model.tokenizer_name_or_path or config.model.name_or_path
         rank0_print(f'Loading tokenizer {tokenizer_name_or_path}')
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name_or_path, cache_dir=get_local_dir(config.local_dirs))
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name_or_path, cache_dir=get_local_dir(config.local_dirs), token=os.getenv("HUGGINGFACE_TOKEN"))
+        # self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name_or_path, cache_dir=get_local_dir(config.local_dirs))
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+        self.policy = policy
+        self.reference_model = reference_model
 
         # weighted DPO parameters
-        if dynamic_params:
-            self.dynamic_params = dynamic_params
-            self.weights_dict = {}
-            self.weights_dict_allones = {}
-            self.num_users = config.num_users
-            self.num_groups = config.num_groups
-            self.group = self.dynamic_params['group']
-            self.em_iteration = self.dynamic_params['em_iteration']
-            for i in range(config.num_users):
+        self.dynamic_params = dynamic_params
+        self.weights_dict = {}
+        self.weights_dict_allones = {}
+        self.num_users = config.num_users
+        self.num_groups = config.num_groups
+        self.group = self.dynamic_params['group']
+        self.em_iteration = self.dynamic_params['em_iteration']
+        for i in range(config.num_users):
+            if self.num_groups == 1:
+                self.weights_dict[i] = self.dynamic_params['gamma'][i]
+            else:
                 self.weights_dict[i] = self.dynamic_params['gamma'][self.group, i]
-                self.weights_dict_allones[i] = 1
+            self.weights_dict_allones[i] = 1
+        if self.num_groups > 1:
             self.gamma = self.dynamic_params['gamma'].to(self.rank)
             self.eta = self.dynamic_params['eta'].to(self.rank)
-        else:
-            self.dynamic_params = None
-
+        
+        # loading training dataset
         data_iterator_kwargs = dict(
-            names=config.datasets,
             tokenizer=self.tokenizer,
             shuffle=True,
             max_length=config.max_length,
             max_prompt_length=config.max_prompt_length,
             sft_mode=config.loss.name == 'sft',
-            # weights_dict=self.weights_dict
+            names=config.datasets,
         )
-
-        self.policy = policy
-        self.reference_model = reference_model
-
         self.train_iterator = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict, split='train', n_epochs=config.n_epochs, n_examples=config.n_examples, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
         rank0_print(f'Loaded train data iterator')
-        ###
+        
+        # loading evaluation dataset
         self.eval_iterator = []
         self.eval_batches = []
-        if 'imdb' in data_iterator_kwargs['names'][0]:
-            data_iterator_kwargs_correct = deepcopy(data_iterator_kwargs)
-            data_iterator_kwargs_correct['names'] = ['imdb_grammar']
-            data_iterator_kwargs_correct['weights_dict'] = self.weights_dict_allones
-            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_correct, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
-
-            data_iterator_kwargs_short = deepcopy(data_iterator_kwargs)
-            data_iterator_kwargs_short['names'] = ['imdb_sentiment']
-            data_iterator_kwargs_short['weights_dict'] = self.weights_dict_allones
-            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs_short, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
-
-            self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
-            rank0_print(f'Loaded {len(self.eval_batches[0]) + len(self.eval_batches[1])} eval batches of size {config.eval_batch_size}')
+        if 'imdb' in config.datasets[0] and self.config.loss.name in {'dpo', 'ipo'}:
             self.eval_data_names = ['imdb_grammar', 'imdb_sentiment']
+        elif 'globalopinion' in config.datasets[0] and self.config.loss.name in {'dpo', 'ipo'}:
+            self.eval_data_names = ['globalopinion_in', 'globalopinion_mx', 'globalopinion_pk', 'globalopinion_br']
         else:
-            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='test', n_examples=config.n_eval_examples, batch_size=config.eval_batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs)))
-            self.eval_batches.append(list(self.eval_iterator[0]))
-            rank0_print(f'Loaded {len(self.eval_batches[0])} eval batches of size {config.eval_batch_size} for correctness preference')
-            self.eval_data_names = None
-        ###
+            self.eval_data_names = [config.datasets[0]]
+        for dataset_name in self.eval_data_names:
+            data_iterator_kwargs['names'] = [dataset_name]
+            self.eval_iterator.append(get_batch_iterator(**data_iterator_kwargs, 
+                                                        split='test', 
+                                                        n_examples=config.n_eval_examples, 
+                                                        batch_size=config.eval_batch_size, 
+                                                        silent=rank != 0, 
+                                                        cache_dir=get_local_dir(config.local_dirs),
+                                                        weights_dict=self.weights_dict_allones))
+            
+        self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
-
-        if self.dynamic_params:
+        
+        # loading dataset for posterior compuation
+        if self.num_groups > 1:
             self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
             self.posterior_batches = list(self.posterior_batches)
             rank0_print(f'Loaded train data iterator for posterior computing')
@@ -268,7 +237,6 @@ class BasicTrainer(object):
 
     def concatenated_forward(self, model: nn.Module, batch: Dict[str, Union[List, torch.LongTensor]]) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """Run the given model on the given batch of inputs, concatenating the chosen and rejected inputs together.
-
            We do this to avoid doing two forward passes, because it's faster for FSDP.
         """
         concatenated_batch = concatenated_inputs(batch)
@@ -279,14 +247,36 @@ class BasicTrainer(object):
         return chosen_logps, rejected_logps
 
 
-    def get_batch_metrics(self, batch: Dict[str, Union[List, torch.LongTensor]], loss_config: DictConfig, train=True, imdb_pref=None, weighted_loss=True):
+    def get_batch_metrics(self, batch: Dict[str, Union[List, torch.LongTensor]], loss_config: DictConfig, train=True, eval_data_name=None, weighted_loss=True):
         """Compute the SFT or DPO loss and other metrics for the given batch of inputs."""
         metrics = {}
         # train_test = 'train' if train else 'eval'
-        if imdb_pref is None:
+        if eval_data_name is None:
             train_test = 'train' if train else 'eval'
+        elif 'imdb' in eval_data_name:
+            if train:
+                train_test = 'train' 
+            elif eval_data_name == 'imdb_grammar':
+                train_test = 'eval_gramar' 
+            elif eval_data_name == 'imdb_sentiment':
+                train_test = 'eval_sentiment' 
+            else:
+                train_test = 'eval' 
+        elif 'globalopinion' in eval_data_name:
+            if train:
+                train_test = 'train'
+            elif eval_data_name == 'globalopinion_in':
+                train_test = 'eval_in'
+            elif eval_data_name == 'globalopinion_mx':
+                train_test = 'eval_mx'
+            elif eval_data_name == 'globalopinion_pk':
+                train_test = 'eval_pk'
+            elif eval_data_name == 'globalopinion_br':
+                train_test = 'eval_br'
+            else:
+                train_test = 'eval'
         else:
-            train_test = 'train' if train else ('eval_gramar' if imdb_pref == 'imdb_grammar' else 'eval_sentiment')
+            raise ValueError(f'unknown evaluation datasetname {eval_data_name}')
 
         if loss_config.name in {'dpo', 'ipo'}:
             policy_chosen_logps, policy_rejected_logps = self.concatenated_forward(self.policy, batch)
@@ -311,7 +301,8 @@ class BasicTrainer(object):
             chosen_rewards = all_gather_if_needed(chosen_rewards, self.rank, self.world_size)
             rejected_rewards = all_gather_if_needed(rejected_rewards, self.rank, self.world_size)
             reward_accuracies = all_gather_if_needed(reward_accuracies, self.rank, self.world_size)
-
+            
+            metrics[f'rewards_{train_test}/chosen'] = batch['index']#.cpu().numpy().tolist()
             metrics[f'rewards_{train_test}/chosen'] = chosen_rewards.cpu().numpy().tolist()
             metrics[f'rewards_{train_test}/rejected'] = rejected_rewards.cpu().numpy().tolist()
             metrics[f'rewards_{train_test}/accuracies'] = reward_accuracies.cpu().numpy().tolist()
@@ -354,73 +345,43 @@ class BasicTrainer(object):
 
         for batch in self.train_iterator:
             #### BEGIN EVALUATION ####
-            if self.example_counter % self.config.eval_every == 0 and (self.example_counter > 0 or self.config.do_first_eval):
-                rank0_print(f'Running evaluation after {self.example_counter} train examples')
-                self.policy.eval()
-                for i in range(len(self.eval_batches)): ## NEW
-                    use_eval_batches = self.eval_batches[i] ## NEW
-                    if self.eval_data_names is not None:
-                        eval_data_name = self.eval_data_names[i] ## NEW
-                    else:
-                        eval_data_name = None
-                    all_eval_metrics = defaultdict(list)
-                    if self.config.sample_during_eval:
-                        all_policy_samples, all_reference_samples = [], []
-                        policy_text_table = wandb.Table(columns=["step", "prompt", "sample"])
-                        if self.config.loss.name in {'dpo', 'ipo'}:
-                            reference_text_table = wandb.Table(columns=["step", "prompt", "sample"])
+            # sys.stdout.flush()
+            # if self.example_counter % self.config.eval_every == 0 and (self.example_counter > 0 or self.config.do_first_eval):
+            #     rank0_print(f'Running evaluation after {self.example_counter} train examples')
+            #     self.policy.eval()
+            #     for i in range(len(self.eval_batches)): 
+            #         use_eval_batches = self.eval_batches[i] 
+            #         if self.eval_data_names is not None:
+            #             eval_data_name = self.eval_data_names[i] 
+            #         else:
+            #             eval_data_name = None
+            #         all_eval_metrics = defaultdict(list)
 
-                    #for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
-                    for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
-                        local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
-                        with torch.no_grad():
-                            _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, imdb_pref=eval_data_name) ###
+            #         for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
+            #             local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
+            #             with torch.no_grad():
+            #                 _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, eval_data_name=eval_data_name) ###
 
-                        for k, v in eval_metrics.items():
-                            all_eval_metrics[k].extend(v)
+            #             for k, v in eval_metrics.items():
+            #                 all_eval_metrics[k].extend(v)
+                            
+            #         if self.config.loss.name in {'dpo', 'ipo'}:
+            #             eval_filename = 'eval='+ eval_data_name + '_train='+ str(self.config.datasets[0]) + '_iteration='+ str(self.dynamic_params['em_iteration']) + '_group='+ str(self.dynamic_params['group']) + '.csv'
+            #             eval_path = 'eval_csv/' + eval_filename
+            #             pd.DataFrame(all_eval_metrics).to_csv(eval_path, index=False)
 
-                    if self.config.sample_during_eval:
-                        if self.config.n_eval_model_samples < self.config.eval_batch_size:
-                            rank0_print(f'Warning: n_eval_model_samples ({self.config.n_eval_model_samples}) < eval_batch_size ({self.config.eval_batch_size}). Sampling from the first complete eval batch of prompts.')
-                            sample_batches = use_eval_batches[:1]
-                        else:
-                            n_sample_batches = self.config.n_eval_model_samples // self.config.eval_batch_size
-                            sample_batches = use_eval_batches[:n_sample_batches]
-                        for eval_batch in (tqdm.tqdm(sample_batches, desc='Generating samples...') if self.rank == 0 else sample_batches):
-                            local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
-                            policy_samples, reference_samples = self.get_batch_samples(local_eval_batch)
+            #         mean_eval_metrics = {k: sum(v) / len(v) for k, v in all_eval_metrics.items()}
+            #         rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
+            #         if self.config.wandb.enabled and self.rank == 0:
+            #             wandb.log(mean_eval_metrics, step=self.example_counter)
 
-                            all_policy_samples.extend(policy_samples)
-                            all_reference_samples.extend(reference_samples)
-
-                            for prompt, sample in zip(eval_batch['prompt'], policy_samples):
-                                policy_text_table.add_data(self.example_counter, prompt, sample)
-                            if self.config.loss.name in {'dpo', 'ipo'}:
-                                for prompt, sample in zip(eval_batch['prompt'], reference_samples):
-                                    reference_text_table.add_data(self.example_counter, prompt, sample)
-
-                    mean_eval_metrics = {k: sum(v) / len(v) for k, v in all_eval_metrics.items()}
-                    rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
-                    if self.config.sample_during_eval:
-                        rank0_print(json.dumps(all_policy_samples[:10], indent=2))
-                        if self.config.loss.name in {'dpo', 'ipo'}:
-                            rank0_print(json.dumps(all_reference_samples[:10], indent=2))
-
-                    if self.config.wandb.enabled and self.rank == 0:
-                        wandb.log(mean_eval_metrics, step=self.example_counter)
-
-                        if self.config.sample_during_eval:
-                            wandb.log({"policy_samples": policy_text_table}, step=self.example_counter)
-                            if self.config.loss.name in {'dpo', 'ipo'}:
-                                wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
-
-                    if self.example_counter > 0:
-                        if self.config.debug:
-                            rank0_print('skipping save in debug mode')
-                        else:
-                            output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
-                            rank0_print(f'creating checkpoint to write to {output_dir}...')
-                            self.save(output_dir, mean_eval_metrics)
+                    # if self.example_counter > 0:
+                    #     if self.config.debug:
+                    #         rank0_print('skipping save in debug mode')
+                    #     else:
+                    #         output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
+                    #         rank0_print(f'creating checkpoint to write to {output_dir}...')
+                    #         self.save(output_dir, mean_eval_metrics)
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####
@@ -441,7 +402,6 @@ class BasicTrainer(object):
             self.optimizer.step()
             self.scheduler.step()
             self.optimizer.zero_grad()
-
 
             step_time = time.time() - start_time
             examples_per_second = self.config.batch_size / step_time
@@ -464,6 +424,36 @@ class BasicTrainer(object):
             else:
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
+        
+        ### BEGIN EVALUATION ###
+        self.policy.eval()
+        for i in range(len(self.eval_batches)): 
+            sys.stdout.flush()
+            use_eval_batches = self.eval_batches[i] 
+            if self.eval_data_names is not None:
+                eval_data_name = self.eval_data_names[i] 
+            else:
+                eval_data_name = None
+            all_eval_metrics = defaultdict(list)
+
+            for eval_batch in (tqdm.tqdm(use_eval_batches, desc='Computing eval metrics') if self.rank == 0 else use_eval_batches):
+                local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
+                with torch.no_grad():
+                    _, eval_metrics, _ = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False, eval_data_name=eval_data_name) ###
+
+                for k, v in eval_metrics.items():
+                    all_eval_metrics[k].extend(v)
+                    
+            if self.config.loss.name in {'dpo', 'ipo'}:
+                eval_filename = 'eval='+ eval_data_name + '_exp='+ str(self.config.exp_name) + '_iteration='+ str(self.dynamic_params['em_iteration']) + '_group='+ str(self.dynamic_params['group']) + '_seed=' + str(self.config.seed) +'.csv'
+                eval_path = 'eval_csv/' + eval_filename
+                pd.DataFrame(all_eval_metrics).to_csv(eval_path, index=False)
+
+            mean_eval_metrics = {k: sum(v) / len(v) for k, v in all_eval_metrics.items()}
+            rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
+            if self.config.wandb.enabled and self.rank == 0:
+                wandb.log(mean_eval_metrics, step=self.example_counter)
+        ### END EVALUATION ###
 
         if self.dynamic_params:
             if self.group == self.num_groups - 1 and self.rank == 0:
@@ -481,10 +471,15 @@ class BasicTrainer(object):
                 for i in range(len(losses)):
                     label = local_batch['human_label'][i].to(self.rank)
                     losses = losses.to(self.rank)
+                    print('posterior computing stuff')
+                    print('label length')
+                    print(len(label))
+                    print('loss length')
+                    print(len(losses))
                     local_value[0, label] += losses[i]
         global_value = all_gather_if_needed(local_value, self.rank, self.world_size)
         global_value = torch.sum(global_value, axis = 0)
-        return torch.log(torch.tensor(self.eta[self.group])) + global_value
+        return torch.log(torch.tensor(self.eta[self.group])) + -1 * global_value
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
@@ -608,6 +603,10 @@ class FSDPTrainer(BasicTrainer):
         save_policy = FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True)
         with FSDP.state_dict_type(self.policy, StateDictType.FULL_STATE_DICT, optim_state_dict_config=save_policy):
             optimizer_state_dict = FSDP.optim_state_dict(self.policy, self.optimizer)
+        if save_policy:
+            optimizer_state_dict = self.optimizer.state_dict()
+        self.optimizer.load_state_dict(optimizer_state_dict)
+
 
         if self.rank == 0:
             optimizer_filename = 'group' + str(self.group) + '_emiteration' + str(self.em_iteration) + '_optimizer.pt'
