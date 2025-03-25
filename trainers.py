@@ -88,7 +88,6 @@ def preference_loss(policy_chosen_logps: torch.FloatTensor,
     # note that we're not weighing the reward models, only the losses
     chosen_rewards =  beta * (policy_chosen_logps - reference_chosen_logps).detach()
     rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
-
     return losses, chosen_rewards, rejected_rewards
 
 
@@ -468,18 +467,16 @@ class BasicTrainer(object):
             local_batch = slice_and_move_batch_for_device(batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
+                labels = local_batch['human_label'].to(self.rank)
                 for i in range(len(losses)):
-                    label = local_batch['human_label'][i].to(self.rank)
+                    # label = local_batch['human_label'][i].to(self.rank)
+                    label = labels[i]
                     losses = losses.to(self.rank)
-                    print('posterior computing stuff')
-                    print('label length')
-                    print(len(label))
-                    print('loss length')
-                    print(len(losses))
-                    local_value[0, label] += losses[i]
+                    local_value[0, label] -= losses[i]
         global_value = all_gather_if_needed(local_value, self.rank, self.world_size)
         global_value = torch.sum(global_value, axis = 0)
-        return torch.log(torch.tensor(self.eta[self.group])) + -1 * global_value
+        ret_val = torch.log(torch.tensor(self.eta[self.group])) + global_value
+        return ret_val
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""

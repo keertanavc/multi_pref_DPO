@@ -49,9 +49,10 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
     trainer.train()
 
     if config.num_groups > 1:
-        dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += trainer.compute_posterior().to('cpu')
-        print(f'updating gammas for group', dynamic_params['group'])
-        # print(f'log numerator gamma:', dynamic_params['log_numerator_gamma'])
+        log_numerator_gamma_group = trainer.compute_posterior().to('cpu')
+        if self.rank == 0:
+            dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += log_numerator_gamma_group
+            print(f'updating gammas for group', dynamic_params['group'])
 
     # if dynamic_params['em_iteration'] % config.em_iteration_save == 0:
     if dynamic_params['em_iteration'] == dynamic_params['TOTAL_ITERATIONS'] - 1 and config.save_model==True:

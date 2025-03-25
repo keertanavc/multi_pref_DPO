@@ -98,7 +98,7 @@ eval_every: 50_000
 minimum_log_interval_secs: 1.0
 
 # number of users and population sub-groups
-num_users: 500 #=30 for full imdb data
+num_users: 800 
 num_groups: 1 #set num_groups=1 to run regular DPO
 # dirichlet distribution for gamma initialization
 # dirichlet_alpha: [10, 5]

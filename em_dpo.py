@@ -72,6 +72,8 @@ def main(config: DictConfig):
         # dynamic_params['gamma'] = torch.tensor(dynamic_params['gamma'])
         # or just use cluster assignment as the starting point
         dynamic_params['gamma'] = np.zeros((config.num_groups, config.num_users)) 
+        
+        assert config.datasets[0] in ('imdb', 'globalopinion'), f"AssertionError: only imdb and global opinion dataset supported. got dataset {config.datasets[0]}"
         if 'imdb' in config.datasets[0]:
             df = pd.read_csv("hf://datasets/keertanavc/imdb_sentiment-grammar_indexed/" + "train.csv")
         elif 'globalopinion' in config.datasets[0]:
@@ -108,9 +110,6 @@ def main(config: DictConfig):
 
         dynamic_params['gamma'] = new_gamma
         dynamic_params['eta'] = new_eta
-        print('new gamma and eta are:')
-        print(dynamic_params['gamma'])
-        print(dynamic_params['eta'])
 
         # update iteration count
         dynamic_params['em_iteration'] += 1
