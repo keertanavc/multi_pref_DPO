@@ -78,7 +78,7 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
 def get_globalopinion(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
     print(f'Loading Global Opinion dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset("keertanavc/globalopinionv4", split=split, cache_dir=cache_dir)
+    dataset = datasets.load_dataset("keertanavc/globalopinionv5", split=split, cache_dir=cache_dir)
     print('done')
     def split_prompt_and_responses(ex):
         row_data = {}

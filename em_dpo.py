@@ -77,7 +77,7 @@ def main(config: DictConfig):
         if 'imdb' in config.datasets[0]:
             df = pd.read_csv("hf://datasets/keertanavc/imdb_sentiment-grammar_indexed/" + "train.csv")
         elif 'globalopinion' in config.datasets[0]:
-            df = pd.read_csv("hf://datasets/keertanavc/globalopinionv4/" + "train.csv")
+            df = pd.read_csv("hf://datasets/keertanavc/globalopinionv5/" + "train.csv")
         for human, cluster in df.groupby('human_label')['cluster'].unique().items():
             dynamic_params['gamma'][cluster, human] = 1
         dynamic_params['gamma'] = torch.tensor(dynamic_params['gamma'])
