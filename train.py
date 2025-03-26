@@ -50,7 +50,7 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
 
     if config.num_groups > 1:
         log_numerator_gamma_group = trainer.compute_posterior().to('cpu')
-        if self.rank == 0:
+        if rank == 0:
             dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += log_numerator_gamma_group
             print(f'updating gammas for group', dynamic_params['group'])
 

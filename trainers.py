@@ -175,9 +175,29 @@ class BasicTrainer(object):
             sft_mode=config.loss.name == 'sft',
             names=config.datasets,
         )
-        self.train_iterator = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict, split='train', n_epochs=config.n_epochs, n_examples=config.n_examples, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
+        self.train_iterator = get_batch_iterator(**data_iterator_kwargs, 
+                                                weights_dict=self.weights_dict, 
+                                                split='train', 
+                                                n_epochs=config.n_epochs, 
+                                                n_examples=config.n_examples, 
+                                                batch_size=config.batch_size, 
+                                                silent=rank != 0, 
+                                                cache_dir=get_local_dir(config.local_dirs))
         rank0_print(f'Loaded train data iterator')
         
+        # loading dataset for posterior compuation
+        if self.num_groups > 1:
+            self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, 
+                                                        weights_dict=self.weights_dict_allones, 
+                                                        split='train', 
+                                                        n_epochs=1, 
+                                                        n_examples=config.n_examples,  
+                                                        batch_size=config.batch_size, 
+                                                        silent=rank != 0, 
+                                                        cache_dir=get_local_dir(config.local_dirs))
+            # self.posterior_batches = list(self.posterior_batches)
+        rank0_print(f'Loaded train data iterator for posterior computing')
+
         # loading evaluation dataset
         self.eval_iterator = []
         self.eval_batches = []
@@ -199,12 +219,6 @@ class BasicTrainer(object):
             
         self.eval_batches = [list(iterator) for iterator in self.eval_iterator]
         rank0_print(f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}')
-        
-        # loading dataset for posterior compuation
-        if self.num_groups > 1:
-            self.posterior_batches = get_batch_iterator(**data_iterator_kwargs, weights_dict=self.weights_dict_allones, split='train', n_epochs=1, batch_size=config.batch_size, silent=rank != 0, cache_dir=get_local_dir(config.local_dirs))
-            self.posterior_batches = list(self.posterior_batches)
-            rank0_print(f'Loaded train data iterator for posterior computing')
 
     def get_batch_samples(self, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
         """Generate samples from the policy (and reference model, if doing DPO training) for the given batch of inputs."""
@@ -469,7 +483,6 @@ class BasicTrainer(object):
                 _, _, losses = self.get_batch_metrics(local_batch, self.config.loss, train=True, weighted_loss=False)
                 labels = local_batch['human_label'].to(self.rank)
                 for i in range(len(losses)):
-                    # label = local_batch['human_label'][i].to(self.rank)
                     label = labels[i]
                     losses = losses.to(self.rank)
                     local_value[0, label] -= losses[i]
