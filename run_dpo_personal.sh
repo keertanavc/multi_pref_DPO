@@ -12,25 +12,25 @@ source /home/ubuntu/multi-dpo-storage/multi_pref_DPO/kee-env/bin/activate
 # added configuration for FSDP
 ulimit -n 64000
 
-export WANDB_API_KEY="82f62e6158ddd4a620b54554e7faf4de4fbbc2ef"
-export HUGGINGFACE_TOKEN=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
 
 # # program to run regular SFT
 python -u em_dpo.py\
 	save_model=true\
 	model=mistral7b\
-	exp_name=imdb_sft\
-	datasets=[imdb]\
+	exp_name=globalopinion_sft\
+	datasets=[globalopinion]\
 	loss=sft\
-	num_users=1200\
+	num_users=800\
 	num_groups=1\
 	em_steps=1\
 	gradient_accumulation_steps=2\
-	batch_size=64\
-	eval_batch_size=32\
+	batch_size=128\
+	eval_batch_size=64\
 	trainer=FSDPTrainer\
 	sample_during_eval=false\
 	seed=0\
+
+cp temp/globalopinion_sft_seed0/group-0/group0_emiteration0_policy.pt policies/globalopinion/sft_policy.pt
 
 # program to run EMDPO / naive DPO
 python -u em_dpo.py\
@@ -43,7 +43,7 @@ python -u em_dpo.py\
 	loss.beta=0.1\
 	num_users=800\
 	num_groups=4\
-	em_steps=2\
+	em_steps=5\
 	gradient_accumulation_steps=2\
 	batch_size=256\
 	eval_batch_size=128\
@@ -52,14 +52,7 @@ python -u em_dpo.py\
 	model.fsdp_policy_mp=bfloat16\
 	model.archive=/home/ubuntu/multi-dpo-storage/multi_pref_DPO/policies/globalopinion/sft_policy.pt
 	# model.archive=/home/ubuntu/multi-dpo-storage/multi_pref_DPO/policies/imdb/sft_policy.pt
-	# 
 	# model.archive=/scratch/m000086/multi_pref_DPO_marlowe/policies/globalopinion/sft_policy.pt
-
-
-
-
-
-
 
 
 # # Program to run cluster DPO
