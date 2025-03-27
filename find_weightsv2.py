@@ -13,7 +13,11 @@ import json
 T = 100000
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 4
-REGRET_WEIGHTS = [(1, 1), (2, 1), (4, 1), (8, 1), (1, 2), (1, 4), (1, 8)]
+# REGRET_WEIGHTS = [(1, 1), (2, 1), (4, 1), (8, 1), (1, 2), (1, 4), (1, 8)]
+REGRET_WEIGHTS = [(1,1,1,1),(4,1,1,1),(1,4,1,1),(1,1,4,1),(1,1,1,4),\
+                    (2,1,1,1),(1,2,1,1),(1,1,2,1),(1,1,1,2),\
+                    (8,1,1,1),(1,8,1,1),(1,1,8,1),(1,1,1,8)]
+
 
 def set_seed(seed=0):
     torch.manual_seed(seed)
@@ -118,9 +122,11 @@ def main():
     print('being program')
     parser = argparse.ArgumentParser(description="MinMax DPO algorithm")
     parser.add_argument("--sft_policy", type=str, required=True, help='addresses to sft policy')
+    parser.add_argument("--dataset", type=str, default='globalopinion', help="Which dataset did you train on?")
     parser.add_argument("--eval_samples", type=int, default=128, help="No. of samples to evaluate on")
     parser.add_argument("--seed", type=int, default=0, help="which seed is this for?")
     parser.add_argument("--num_groups", type=int, default=2, help="how many groups are there?")
+    parser.add_argument("--iteration", type=int, default=5, help="for emdpo: how many iterations did the algo run for?")
     parser.add_argument("--exp_name", type=str, default='clusterdpo', help="which experiment is this for?")
     parser.add_argument("--model", type=str, default="mistral7b", help='which LLM are you using?')
     args = parser.parse_args()
@@ -131,9 +137,9 @@ def main():
     all_states = []
     for group in range(args['num_groups']):
         if args['exp_name'] == 'clusterdpo':
-            all_states.append("temp/cluster" + str(group) + "_allseeds_seed" + str(args['seed']) + "/group-0/group0_emiteration0_policy.pt")
+            all_states.append("temp/" + args['dataset'] + "_cluster" + str(group) + "_allseeds_seed" + str(args['seed']) + "/group-0/group0_emiteration0_policy.pt")
         elif args['exp_name'] == 'emdpo':
-            all_states.append("temp/emdpo_seed" + str(args['seed']) + "/group-" + str(group) + "/group" + str(group) + "_emiteration2_policy.pt")
+            all_states.append("temp/" + args['dataset'] +"_emdpo_seed" + str(args['seed']) + "/group-" + str(group) + "/group" + str(group) + "_emiteration" + str(args['iteration']-1) +"_policy.pt")
     args['states'] = all_states
     print('loading model and dataset')
     if args['model'] == 'mistral7b':
@@ -161,7 +167,7 @@ def main():
         weights[str(reg_w)] = list(compute_minmax_regret(df, args['num_groups'], reg_w))
         print('regret weights are: ', reg_w)
         print('combination weights are: ', weights[str(reg_w)])
-    filename = "eval_csv/weights/clusterdpo/exp_" + args['exp_name'] + "_seed" + str(args['seed']) + ".json"
+    filename = "eval_csv/weights/globalopinion_emdpo/exp_" + args['exp_name'] + "_seed" + str(args['seed']) + ".json"
     with open(filename, "w") as f:
         json.dump(weights, f, indent=4)
 
