@@ -24,24 +24,24 @@ python -u em_dpo.py\
 	num_groups=1\
 	em_steps=1\
 	gradient_accumulation_steps=2\
-	batch_size=128\
-	eval_batch_size=64\
+	batch_size=256\
+	eval_batch_size=128\
 	trainer=FSDPTrainer\
 	sample_during_eval=false\
 	seed=0\
 
 cp temp/globalopinion_sft_seed0/group-0/group0_emiteration0_policy.pt policies/globalopinion/sft_policy.pt
 
-# program to run EMDPO / naive DPO
+# program to run EMDPO 
 python -u em_dpo.py\
-	seed=0\
-	save_model=false\
+	seed=1\
+	save_model=true\
 	model=mistral7b\
 	exp_name=globalopinon_emdpo\
 	datasets=[globalopinion]\
 	loss=dpo\
 	loss.beta=0.1\
-	num_users=800\
+	num_users=1600\
 	num_groups=4\
 	em_steps=5\
 	gradient_accumulation_steps=2\
@@ -53,6 +53,26 @@ python -u em_dpo.py\
 	model.archive=/home/ubuntu/multi-dpo-storage/multi_pref_DPO/policies/globalopinion/sft_policy.pt
 	# model.archive=/home/ubuntu/multi-dpo-storage/multi_pref_DPO/policies/imdb/sft_policy.pt
 	# model.archive=/scratch/m000086/multi_pref_DPO_marlowe/policies/globalopinion/sft_policy.pt
+
+# Run DPO
+python -u em_dpo.py\
+	seed=0\
+	save_model=true\
+	model=mistral7b\
+	exp_name=globalopinion_dpo\
+	datasets=[globalopinion]\
+	loss=dpo\
+	loss.beta=0.1\
+	num_users=800\
+	num_groups=1\
+	em_steps=1\
+	gradient_accumulation_steps=2\
+	batch_size=32\
+	eval_batch_size=16\
+	trainer=FSDPTrainer\
+	sample_during_eval=false\
+	model.fsdp_policy_mp=bfloat16\
+	model.archive=/home/ubuntu/multi-dpo-storage/multi_pref_DPO/policies/globalopinion/sft_policy.pt
 
 
 # # Program to run cluster DPO
@@ -70,13 +90,23 @@ do
         num_groups=1 \
         em_steps=1 \
         gradient_accumulation_steps=2 \
-        batch_size=64 \
-        eval_batch_size=32 \
+        batch_size=256 \
+        eval_batch_size=128 \
         trainer=FSDPTrainer \
         sample_during_eval=false \
         model.fsdp_policy_mp=bfloat16 \
         model.archive=/scratch/m000086/multi_pref_DPO_marlowe/policies/globalopinion/sft_policy.pt
 done
+
+python find_weightsv2.py \
+		--exp_name "emdpo" \
+		--seed 1 \
+		--sft_policy '/home/ubuntu/multi-dpo-storage/multi_pref_DPO/policies/globalopinion/sft_policy.pt'\
+		--dataset globalopinion\
+		--num_groups 4\
+		--iteration 5 \
+		--exp_name emdpo
+
 
 # python find_weightsv2.py --exp_name "emdpo" --seed 1 --sft_policy '/scratch/m000086/multi_pref_DPO_marlowe/policies/synthetic/sft_policy.pt'
 # python find_weightsv2.py --exp_name "clusterdpo" --seed 5 --sft_policy '/scratch/m000086/multi_pref_DPO_marlowe/policies/synthetic/sft_policy.pt'
