@@ -54,8 +54,11 @@ def worker_main(rank: int, world_size: int, config: DictConfig, policy: nn.Modul
             dynamic_params['log_numerator_gamma'][dynamic_params['group'], :] += log_numerator_gamma_group
             print(f'updating gammas for group', dynamic_params['group'])
 
-    # if dynamic_params['em_iteration'] % config.em_iteration_save == 0:
+    # saves final EMDPO policies
     if dynamic_params['em_iteration'] == dynamic_params['TOTAL_ITERATIONS'] - 1 and config.save_model==True:
+        trainer.save()
+    # saves cluster DPO policies
+    if dynamic_params['em_iteration'] == 0 and config.save_model==True:
         trainer.save()
     if rank == 0 and config.wandb.enabled:
         wandb.finish()

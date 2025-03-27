@@ -99,6 +99,7 @@ minimum_log_interval_secs: 1.0
 
 # number of users and population sub-groups
 num_users: 800 
+prefs_per_user: 32
 num_groups: 1 #set num_groups=1 to run regular DPO
 # dirichlet distribution for gamma initialization
 # dirichlet_alpha: [10, 5]
