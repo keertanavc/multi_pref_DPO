@@ -78,7 +78,12 @@ def get_imdb(split: str, name: str, silent: bool = False, cache_dir: str = None,
 def get_globalopinion(split: str, name: str, silent: bool = False, cache_dir: str = None, weights_dict: Dict = None) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     # assign equal weight to all data points, i.e. perform regular DPO is no weights are passed
     print(f'Loading Global Opinion dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset("keertanavc/globalopinionv5", split=split, cache_dir=cache_dir)
+    # if 'og' in name:
+    print('loading .. keertanavc/globalopinion_og')
+    dataset = datasets.load_dataset("keertanavc/globalopinion_og", split=split, cache_dir=cache_dir)
+    # else:
+    #     print('loading .. keertanavc/globalopinionv5')
+    #     dataset = datasets.load_dataset("keertanavc/globalopinionv5", split=split, cache_dir=cache_dir)
     print('done')
     def split_prompt_and_responses(ex):
         row_data = {}
@@ -108,16 +113,16 @@ def get_globalopinion(split: str, name: str, silent: bool = False, cache_dir: st
         if 'cluster' in name: # give name as globalopinion_cluster_{i} to train only on cluster i
             if int(cluster) != int(name[-1]):
                 continue
-        if name == 'globalopinion_in':
+        if '_in' in name:
             if pref_type != 'Indonesia':
                 continue
-        elif name == 'globalopinion_mx':
+        elif '_mx' in name: 
             if pref_type != 'Mexico':
                 continue
-        elif name == 'globalopinion_pk':
+        elif '_pk' in name: 
             if pref_type != 'Pakistan':
                 continue
-        elif name == 'globalopinion_br':
+        elif '_br' in name: 
             if pref_type != 'Britain':
                 continue
         prompt = row_data['prompt']

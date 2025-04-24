@@ -31,7 +31,6 @@ def main(config: DictConfig):
     '''Main entry point to the program. Validates config. Initiates EM-DPO iterations.'''
     # Resolves config interpolations, validates required keys, adjusts eval frequency, 
     # asserts group size, handles FSDP port, saves config, and sets cache directory.    
-    set_seed(config.seed)
     OmegaConf.resolve(config)
     print('run directory')
     print(config.local_run_dir)
@@ -74,21 +73,19 @@ def main(config: DictConfig):
         # or just use cluster assignment as the starting point
         # dynamic_params['gamma'] = np.zeros((config.num_groups, config.num_users)) 
         
-        assert config.datasets[0] in ('imdb', 'globalopinion'), f"AssertionError: only imdb and global opinion dataset supported. got dataset {config.datasets[0]}"
+        # assert config.datasets[0] in ('imdb', 'globalopinion'), f"AssertionError: only imdb and global opinion dataset supported. got dataset {config.datasets[0]}"
         if 'imdb' in config.datasets[0]:
             df = pd.read_csv("hf://datasets/keertanavc/imdb_sentiment-grammar_indexed/" + "train.csv")
             for human, cluster in df.groupby('human_label')['cluster'].unique().items():
                 dynamic_params['gamma'][cluster, human] = 1
         elif 'globalopinion' in config.datasets[0]:
-            # df = pd.read_csv("hf://datasets/keertanavc/globalopinionv5/" + "train.csv")
-            # df.drop('cluster', axis=1, inplace=True)
-            # cluster_df(df, config.num_users, config.prefs_per_user, config.num_groups)
-            dynamic_params['gamma'] = np.load('gamma_seed='+ str(config.seed) +'.npy')
+            if 'hyper' in config.exp_name:
+                dynamic_params['gamma'] = np.load('cluster_hyper/gamma_K='+ str(config.num_groups) +'.npy')
+            else:
+                dynamic_params['gamma'] = np.load('cluster_seeded/gamma_seed='+ str(config.seed) +'.npy')
             assert dynamic_params['gamma'].shape == (config.num_groups, config.num_users)
         dynamic_params['gamma'] = torch.tensor(dynamic_params['gamma'])
-        
         dynamic_params['eta'] = dynamic_params['gamma'].mean(axis=1)
-        # OR initialize according to cluster DPO
 
     # variables to keep track of EM step iterations
     dynamic_params['TOTAL_ITERATIONS'] = config.em_steps

@@ -8,15 +8,25 @@ import numpy as np
 import argparse
 import os
 import json
+import itertools
 
 # CONSTANTS
 T = 100000
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-BATCH_SIZE = 4
-# REGRET_WEIGHTS = [(1, 1), (2, 1), (4, 1), (8, 1), (1, 2), (1, 4), (1, 8)]
-REGRET_WEIGHTS = [(1,1,1,1),(4,1,1,1),(1,4,1,1),(1,1,4,1),(1,1,1,4),\
-                    (2,1,1,1),(1,2,1,1),(1,1,2,1),(1,1,1,2),\
-                    (8,1,1,1),(1,8,1,1),(1,1,8,1),(1,1,1,8)]
+BATCH_SIZE = 16
+# REGRET_WEIGHTS = [(1,1,1,1),(4,1,1,1),(1,4,1,1),(1,1,4,1),(1,1,1,4),\
+#                     (2,1,1,1),(1,2,1,1),(1,1,2,1),(1,1,1,2),\
+#                     (8,1,1,1),(1,8,1,1),(1,1,8,1),(1,1,1,8)]
+
+
+def generate_tuples(K, values=[1, 2, 4, 8]):
+    result = []    
+    for value in values:
+        # Create a list with K-1 ones and one non-one value
+        temp = [1] * (K - 1) + [value]
+        # Generate all possible permutations of this list
+        result.extend(set(itertools.permutations(temp)))  # set to avoid duplicates
+    return sorted(list(result))
 
 
 def set_seed(seed=0):
@@ -133,13 +143,23 @@ def main():
     args = vars(args)
     print(args)
     set_seed(args['seed'] + 42)
-    
+    print('computing weights for seed = ', args['seed'])
+    global REGRET_WEIGHTS
+    REGRET_WEIGHTS = generate_tuples(args['num_groups'])
     all_states = []
     for group in range(args['num_groups']):
         if args['exp_name'] == 'clusterdpo':
-            all_states.append("temp/" + args['dataset'] + "_cluster" + str(group) + "_allseeds_seed" + str(args['seed']) + "/group-0/group0_emiteration0_policy.pt")
+            # all_states.append("temp/" + args['dataset'] + "_cluster" + str(group) + "_allseeds_seed" + str(args['seed']) + "/group-0/group0_emiteration0_policy.pt")
+            all_states.append("temp/" + args['dataset'] +"_emdpo_seed" + str(args['seed']) + "/group-" + str(group) + "/group" + str(group) + "_emiteration" + str(0) +"_policy.pt")
+            print(all_states)
         elif args['exp_name'] == 'emdpo':
             all_states.append("temp/" + args['dataset'] +"_emdpo_seed" + str(args['seed']) + "/group-" + str(group) + "/group" + str(group) + "_emiteration" + str(args['iteration']-1) +"_policy.pt")
+        elif args['exp_name'] == 'emdpo_hyper':
+            all_states.append("temp/globalopinon_hyper_dpo_" + str(args['num_groups']) + "_seed0/group-" + str(group) + "/group" + str(group) + "_emiteration" + str(args['iteration']-1) +"_policy.pt")
+            print(all_states[-1])
+        elif args['exp_name'] == 'clusterdpo_hyper':
+            all_states.append("temp/globalopinon_hyper_dpo_" + str(args['num_groups']) + "_seed0/group-" + str(group) + "/group" + str(group) + "_emiteration0_policy.pt")
+            print(all_states[-1])
     args['states'] = all_states
     print('loading model and dataset')
     if args['model'] == 'mistral7b':
@@ -151,8 +171,10 @@ def main():
                                                 torch_dtype='auto', 
                                                 low_cpu_mem_usage=True,
                                                 token=os.environ.get("HUGGINGFACE_TOKEN")).to(DEVICE)
-
-    df = load_dataset("keertanavc/imdb_sentiment-grammar_indexed", split='test')
+    if args['dataset'] == 'imdb':
+        df = load_dataset("keertanavc/imdb_sentiment-grammar_indexed", split='test')
+    elif args['dataset'] == 'globalopinion':
+        df = load_dataset("keertanavc/globalopinionv5", split='test')
     df = df.to_pandas()
     df = df[['prompt']][:args['eval_samples']]
     print('generating completions')
@@ -167,7 +189,7 @@ def main():
         weights[str(reg_w)] = list(compute_minmax_regret(df, args['num_groups'], reg_w))
         print('regret weights are: ', reg_w)
         print('combination weights are: ', weights[str(reg_w)])
-    filename = "eval_csv/weights/globalopinion_emdpo/exp_" + args['exp_name'] + "_seed" + str(args['seed']) + ".json"
+    filename = "eval_csv/weights/globalopinion_emdpo/exp_" + args['exp_name'] + "_K=" + str(args['num_groups']) + "_seed" + str(args['seed']) + ".json"
     with open(filename, "w") as f:
         json.dump(weights, f, indent=4)
 
