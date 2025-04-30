@@ -227,7 +227,7 @@ def get_collate_fn(tokenizer) -> Callable[[List[Dict]], Dict[str, Union[List, to
                 padded_batch[k] = pad_sequence(to_pad, batch_first=True, padding_value=padding_value)
                 if 'prompt' in k:  # for the prompt, flip back so padding is on left side
                     padded_batch[k] = padded_batch[k].flip(dims=[1])
-            elif k == 'weight' or k == 'human_label':
+            elif k in ['weight', 'human_label', 'index']:
                 padded_batch[k] = torch.tensor([ex[k] for ex in batch])
             else:
                 padded_batch[k] = [ex[k] for ex in batch]
@@ -388,7 +388,7 @@ def get_batch_iterator(names: List[str],
                     if done:
                         break
                     indx = int(min(p[0], p[1])/2)
-                    batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx], index)
+                    batch_element = tokenize_batch_element(prompt, responses[p[0]], responses[p[1]], truncation_mode, tokenizer, max_length, max_prompt_length, weight[indx], human_label[indx], index[indx])
                     batch.append(batch_element)
                     example_idx += 1
                     if len(batch) == batch_size:

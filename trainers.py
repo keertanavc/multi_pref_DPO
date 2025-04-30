@@ -306,16 +306,19 @@ class BasicTrainer(object):
             if 'weight' in batch and weighted_loss:
                 loss_kwargs['weight'] = batch['weight']
             ###
+
+            indices = batch['index']
+            indices = all_gather_if_needed(indices, self.rank, self.world_size)
+            metrics[f'rewards_{train_test}/index'] = indices.cpu().numpy().toli
+            
             losses, chosen_rewards, rejected_rewards = preference_loss(
                 policy_chosen_logps, policy_rejected_logps, reference_chosen_logps, reference_rejected_logps, **loss_kwargs)
 
             reward_accuracies = (chosen_rewards > rejected_rewards).float()
-
             chosen_rewards = all_gather_if_needed(chosen_rewards, self.rank, self.world_size)
             rejected_rewards = all_gather_if_needed(rejected_rewards, self.rank, self.world_size)
             reward_accuracies = all_gather_if_needed(reward_accuracies, self.rank, self.world_size)
             
-            metrics[f'rewards_{train_test}/chosen'] = batch['index']#.cpu().numpy().tolist()
             metrics[f'rewards_{train_test}/chosen'] = chosen_rewards.cpu().numpy().tolist()
             metrics[f'rewards_{train_test}/rejected'] = rejected_rewards.cpu().numpy().tolist()
             metrics[f'rewards_{train_test}/accuracies'] = reward_accuracies.cpu().numpy().tolist()
@@ -457,7 +460,7 @@ class BasicTrainer(object):
                 for k, v in eval_metrics.items():
                     all_eval_metrics[k].extend(v)
                     
-            if self.config.loss.name in {'dpo', 'ipo'}:
+            if self.config.loss.name in {'dpo', 'ipo'} and self.rank == 0:
                 eval_filename = 'eval='+ eval_data_name + '_exp='+ str(self.config.exp_name) + '_iteration='+ str(self.dynamic_params['em_iteration']) + '_group='+ str(self.dynamic_params['group']) + '_seed=' + str(self.config.seed) +'.csv'
                 eval_path = 'eval_csv/' + eval_filename
                 pd.DataFrame(all_eval_metrics).to_csv(eval_path, index=False)
