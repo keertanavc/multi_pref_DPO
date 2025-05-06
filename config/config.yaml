@@ -118,8 +118,6 @@ defaults:
 
 # whether you need huggingface authorization
 huggingface_auth: True
-# huggingface token
-huggingface_token:  "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"
 
 # saving the model
 save_model: True
